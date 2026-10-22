@@ -108,9 +108,19 @@ function shortEasing(easing) {
   return easing;
 }
 
-function selectPreset(id) {
+/**
+ * Select a preset and (re)mount it.
+ *
+ * `restore` exists for one reason: booting from a shared URL. The naive sequence
+ * — write URL state into `state.motion`, then call `selectPreset()` — loses it,
+ * because selecting a preset resets the overrides to that preset's defaults. The
+ * link appeared to work (the preset switched) while the tuned values silently
+ * vanished, which is the worst kind of failure: it looks fine until someone
+ * compares two screenshots.
+ */
+function selectPreset(id, restore = null) {
   state.presetId = id;
-  state.motion = {};
+  state.motion = restore ? { ...restore } : {};
   const preset = getPreset(id);
 
   document.querySelectorAll(".lab-preset").forEach((el) => {
@@ -124,10 +134,11 @@ function selectPreset(id) {
   const family = FAMILIES.find((f) => f.id === preset.family);
   $("#family-question").textContent = family ? family.question : "";
 
-  syncControlsFromMotion(preset.motion);
+  syncControlsFromMotion({ ...preset.motion, ...state.motion });
   mount();
   renderExport();
   updateFacts();
+  syncUrl();
 }
 
 // ------------------------------------------------------------- components ----
@@ -211,6 +222,7 @@ function applyMotion() {
   current?.setMotion?.(motion);
   updateFacts();
   renderExport();
+  syncUrl();
 }
 
 // ---------------------------------------------------------------- controls ---
@@ -535,6 +547,7 @@ function bindControls() {
   });
 
   $("#copy-config").addEventListener("click", () => copyText(exportConfig(state.presetId, state.motion)));
+  $("#copy-url").addEventListener("click", () => copyText(buildUrl()));
   $("#copy-code").addEventListener("click", () => copyText($("#out").textContent));
 
   $("#policy").addEventListener("change", (ev) => {
@@ -601,14 +614,136 @@ function selectTab(tab) {
   });
   $("#out").setAttribute("aria-labelledby", tab.id);
   renderExport();
+  syncUrl();
 }
 
 // -------------------------------------------------------------------- boot ---
 
+/**
+ * URL state.
+ *
+ * Without this, a tuned configuration can only be shared as JSON pasted into a
+ * message, and a bug report cannot point at the exact state that produced it.
+ * The query string is the cheapest fix and needs no server.
+ *
+ * Format is deliberately flat and readable so it survives being hand-edited:
+ *   ?p=press-springy&d=480&e=spring(1,300,16)&t=press&r=instant
+ * Only non-default values are written, so a default state has a clean URL.
+ */
+const URL_KEYS = {
+  p: "presetId",
+  d: "duration",
+  dl: "delay",
+  e: "easing",
+  t: "trigger",
+  r: "reduced",
+  i: "iterations",
+  dist: "distance",
+  sc: "scale",
+  pol: "policy",
+  tab: "tab",
+};
+
+function readUrlState() {
+  const params = new URLSearchParams(location.search);
+  const next = { motion: {} };
+
+  const preset = params.get("p");
+  if (preset) {
+    try {
+      getPreset(preset);
+      next.presetId = preset;
+    } catch {
+      // An unknown preset in a shared link must not break the page.
+    }
+  }
+
+  const num = (key, parse = Number) => {
+    const raw = params.get(key);
+    if (raw === null) return undefined;
+    if (raw === "auto") return "auto";
+    const v = parse(raw);
+    return Number.isFinite(v) ? v : undefined;
+  };
+
+  const duration = num("d");
+  if (duration !== undefined) next.motion.duration = duration;
+  const delay = num("dl");
+  if (delay !== undefined && delay !== "auto") next.motion.delay = delay;
+  if (params.get("e")) next.motion.easing = params.get("e");
+  if (params.get("t")) next.motion.trigger = params.get("t");
+  if (params.get("r")) next.motion.reduced = params.get("r");
+  if (params.get("i") === "infinite") next.motion.iterations = Infinity;
+  const distance = num("dist");
+  if (distance !== undefined && distance !== "auto") next.motion.distance = distance;
+  const scale = num("sc");
+  if (scale !== undefined && scale !== "auto") next.motion.scale = scale;
+  if (params.get("pol")) next.policy = params.get("pol");
+  if (params.get("tab")) next.tab = params.get("tab");
+
+  return next;
+}
+
+/** Serialise only what differs from the preset defaults. */
+function buildUrl() {
+  const preset = getPreset(state.presetId);
+  const params = new URLSearchParams();
+  params.set("p", state.presetId);
+
+  const motion = { ...preset.motion, ...state.motion };
+  if (String(motion.duration) !== String(preset.motion.duration)) params.set("d", String(motion.duration));
+  if (motion.delay !== preset.motion.delay) params.set("dl", String(motion.delay));
+  if (motion.easing !== preset.motion.easing) params.set("e", String(motion.easing));
+  if (motion.trigger !== preset.motion.trigger) params.set("t", String(motion.trigger));
+  if (motion.reduced !== preset.motion.reduced) params.set("r", String(motion.reduced));
+  if (motion.iterations === Infinity && preset.motion.iterations !== Infinity) params.set("i", "infinite");
+  if (motion.distance !== preset.motion.distance) params.set("dist", String(motion.distance));
+  if (motion.scale !== preset.motion.scale) params.set("sc", String(motion.scale));
+  if (state.policy !== "respect") params.set("pol", state.policy);
+  if (state.tab !== "css") params.set("tab", state.tab);
+
+  return `${location.origin}${location.pathname}?${params.toString()}`;
+}
+
+/**
+ * Write the current state into the address bar without adding a history entry.
+ *
+ * `replaceState` rather than `pushState`: every slider drag would otherwise
+ * create a history entry, and the back button would undo one pixel of duration
+ * at a time.
+ */
+let urlTimer = null;
+function syncUrl() {
+  clearTimeout(urlTimer);
+  urlTimer = setTimeout(() => {
+    try {
+      history.replaceState(null, "", buildUrl());
+    } catch {
+      /* file:// blocks history manipulation in some browsers; the lab still works */
+    }
+  }, 250);
+}
+
 function boot() {
+  const fromUrl = readUrlState();
+  if (fromUrl.presetId) state.presetId = fromUrl.presetId;
+  if (fromUrl.policy) {
+    state.policy = fromUrl.policy;
+    $("#policy").value = fromUrl.policy;
+  }
+  if (fromUrl.tab && fromUrl.tab !== state.tab) state.tab = fromUrl.tab;
+
   buildGallery();
   bindControls();
-  selectPreset(state.presetId);
+  // Overrides are handed to selectPreset rather than written into state first:
+  // selecting a preset resets overrides, so the order matters.
+  selectPreset(state.presetId, fromUrl.motion && Object.keys(fromUrl.motion).length ? fromUrl.motion : null);
+
+  // Restore the tab the link asked for, after selectPreset has rendered.
+  if (fromUrl.tab) {
+    const tab = document.getElementById(`tab-${fromUrl.tab}`);
+    if (tab) selectTab(tab);
+  }
 
   const started = performance.now();
   const presetCount = PRESETS.length;
@@ -618,7 +753,15 @@ function boot() {
   } · linear(): ${supportsLinear() ? "yes" : "no"}`;
 
   document.documentElement.dataset.labReady = "true";
-  window.__lab = { state, mount, applyMotion, selectPreset, readControls, getLastPlan: () => lastPlan };
+  window.__lab = {
+    state,
+    mount,
+    applyMotion,
+    selectPreset,
+    readControls,
+    buildUrl,
+    getLastPlan: () => lastPlan,
+  };
 }
 
 boot();

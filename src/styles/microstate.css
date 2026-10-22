@@ -364,7 +364,20 @@
   display: grid;
   gap: 8px;
   width: min(340px, 100%);
-  touch-action: none;
+  /* `pan-y`, not `none`. With `none` the list becomes a black hole for finger
+     gestures: a page that starts scrolling with a touch on a row could never
+     scroll at all. The component arms a drag only after a long press, and until
+     then the browser owns the gesture. */
+  touch-action: pan-y;
+}
+
+/* The armed state (touch long-press succeeded, or a keyboard grab) needs to be
+   unmistakable: if the user cannot tell that the mode changed, they lift their
+   finger a moment too early and the drag never happens. */
+.ms-draglist__item.is-armed {
+  border-color: var(--ms-accent);
+  box-shadow: 0 6px 18px rgb(43 38 34 / 0.16);
+  cursor: grabbing;
 }
 
 .ms-draglist__item {

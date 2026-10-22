@@ -446,6 +446,68 @@ export function exportAll(presetId, motionOverride = {}, options = {}) {
   };
 }
 
+/**
+ * Export several presets into one stylesheet.
+ *
+ * The single-preset export answers "what does this interaction look like". A real
+ * page has three or four of them, and hand-merging four generated stylesheets —
+ * each with its own `:root`, its own `will-change` handling and its own
+ * reduced-motion block — is exactly the kind of copy-paste that rots.
+ *
+ * The output is a single file with one reduced-motion block per preset (they
+ * carry different strategies, so they cannot be merged into one), a shared header
+ * and a manifest comment listing what is inside.
+ */
+export function exportBundle(configs, options = {}) {
+  const list = Array.isArray(configs) ? configs : Object.entries(configs).map(([preset, motion]) => ({ preset, motion }));
+
+  if (!list.length) throw new Error("exportBundle needs at least one preset");
+
+  const parts = [];
+  const manifest = [];
+  const conflicts = [];
+
+  for (const cfg of list) {
+    const presetId = typeof cfg === "string" ? cfg : cfg.preset;
+    const motion = (typeof cfg === "string" ? {} : cfg.motion) ?? {};
+    const out = exportCss(presetId, motion, options);
+
+    // Two presets that resolve to the same class name would silently overwrite
+    // each other in the merged file. Detect it rather than ship the bug.
+    if (manifest.some((m) => m.className === out.className)) {
+      conflicts.push(out.className);
+    }
+
+    parts.push(out.css);
+    manifest.push({ preset: presetId, className: out.className, notes: out.notes });
+  }
+
+  const header = [
+    "/* microstate-lab — bundle export",
+    ` * ${manifest.length} interaction${manifest.length === 1 ? "" : "s"}: ${manifest.map((m) => m.className).join(", ")}`,
+    " *",
+    " * Every rule is namespaced under its own class. Add the class to run it;",
+    " * for click/manual triggers add `.is-running` and remove it on animationend.",
+    " * Each preset carries its own prefers-reduced-motion block because the",
+    " * strategies differ — do not collapse them into one.",
+    " */",
+    "",
+  ].join("\n");
+
+  const css = header + parts.join("\n\n");
+
+  return {
+    css,
+    manifest,
+    conflicts,
+    /** Markup for every component in the bundle, for a quick manual check. */
+    html: manifest.map((m) => `<!-- ${m.preset} -->\n<div class="${m.className}" tabindex="0">${m.preset}</div>`).join("\n\n"),
+    notes: conflicts.length
+      ? [`Duplicate class names: ${conflicts.join(", ")} — later rules win.`]
+      : ["All class names are unique."],
+  };
+}
+
 /** A JSON snapshot of the current settings, so a configuration can be shared. */
 export function exportConfig(presetId, motionOverride = {}) {
   const preset = getPreset(presetId);

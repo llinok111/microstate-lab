@@ -82,7 +82,7 @@ export const PRESETS = [
     label: "Springy press",
     effect: "press",
     description: "Underdamped spring — overshoots slightly, feels physical.",
-    motion: { duration: 420, delay: 0, easing: "spring(1, 300, 16)", reduced: "instant", trigger: "press", scale: 0.94 },
+    motion: { duration: "auto", delay: 0, easing: "spring(1, 300, 16)", reduced: "instant", trigger: "press", scale: 0.94 },
   },
   {
     id: "press-lift",
@@ -134,7 +134,7 @@ export const PRESETS = [
     label: "Check pop",
     effect: "check",
     description: "Icon overshoots once, then rests. Announced via live region, focus moves to the reset action.",
-    motion: { duration: 380, delay: 0, easing: "spring(1, 260, 18)", reduced: "fade", trigger: "manual", scale: 1.08 },
+    motion: { duration: "auto", delay: 0, easing: "spring(1, 260, 18)", reduced: "fade", trigger: "manual", scale: 1.08 },
   },
   {
     id: "success-fade",
@@ -212,7 +212,7 @@ export const PRESETS = [
     label: "Free drag",
     effect: "none",
     description: "1:1 pointer tracking, spring settle on release.",
-    motion: { duration: 320, delay: 0, easing: "spring(1, 220, 20)", reduced: "instant", trigger: "manual" },
+    motion: { duration: "auto", delay: 0, easing: "spring(1, 220, 20)", reduced: "instant", trigger: "manual" },
   },
   {
     id: "drag-sort",
@@ -238,7 +238,7 @@ export const PRESETS = [
     label: "Switch spring",
     effect: "none",
     description: "Springy thumb with a small overshoot. Still correct at 0ms.",
-    motion: { duration: 380, delay: 0, easing: "spring(1, 320, 17)", reduced: "instant", trigger: "click" },
+    motion: { duration: "auto", delay: 0, easing: "spring(1, 320, 17)", reduced: "instant", trigger: "click" },
   },
   {
     id: "toggle-delayed",

@@ -1,6 +1,6 @@
 {
   "name": "microstate-lab",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A micro-interaction laboratory: state-driven feedback components with tunable duration, easing, delay and trigger, plus live preview and standalone code export.",
   "type": "module",
   "main": "dist/microstate.cjs",
@@ -11,6 +11,14 @@
       "import": "./dist/microstate.js",
       "require": "./dist/microstate.cjs"
     },
+    "./auto": {
+      "import": "./dist/microstate-auto.js",
+      "require": "./dist/microstate-auto.cjs"
+    },
+    "./elements": {
+      "import": "./dist/microstate-elements.js",
+      "require": "./dist/microstate-elements.cjs"
+    },
     "./css": "./dist/microstate.css"
   },
   "files": [
@@ -19,12 +27,13 @@
   ],
   "scripts": {
     "build": "node build.mjs",
-    "test": "node --test --test-concurrency=1 test/easing.test.mjs test/motion.test.mjs test/export.test.mjs test/styles.test.mjs",
-    "test:browser": "node --test --test-concurrency=1 test/browser.test.mjs test/a11y.test.mjs test/export-runtime.test.mjs",
+    "test": "node --test --test-concurrency=1 test/easing.test.mjs test/motion.test.mjs test/export.test.mjs test/styles.test.mjs test/preferences.test.mjs",
+    "test:browser": "node --test --test-concurrency=1 test/browser.test.mjs test/a11y.test.mjs test/export-runtime.test.mjs test/runtime.test.mjs",
     "test:all": "npm test && npm run test:browser",
     "figures": "node scripts/figures.mjs",
     "figures:check": "node scripts/figures.mjs --check",
-    "pack": "node scripts/pack.mjs"
+    "pack": "node scripts/pack.mjs",
+    "cli": "node scripts/cli.mjs"
   },
   "keywords": [
     "micro-interactions",
@@ -45,5 +54,8 @@
   "devDependencies": {
     "esbuild": "^0.19.0",
     "sharp": "^0.35.5"
+  },
+  "bin": {
+    "microstate": "./scripts/cli.mjs"
   }
 }

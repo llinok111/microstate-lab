@@ -40,8 +40,12 @@ export function mountAsyncButton(root, options = {}) {
   const el = h("button", { class: "ms-btn ms-btn--primary ms-async", type: "button" }, [icon, text]);
 
   const stage = h("div", { class: "ms-stage ms-stage--center" }, [el]);
-  const hint = h("p", { class: "ms-hint", text: "Runs a fake 400ms request, then confirms. Shift-click to force a failure." });
-  const readout = h("p", { class: "ms-readout", "aria-live": "off", text: "state: idle" });
+  // The hint describes a simulated request; when a real action is wired the
+  // text would be a lie, so it is omitted rather than left to mislead.
+  const hint = options.action
+    ? null
+    : h("p", { class: "ms-hint", text: "Runs a fake 400ms request, then confirms. Shift-click to force a failure." });
+  const readout = options.action ? null : h("p", { class: "ms-readout", "aria-live": "off", text: "state: idle" });
 
   function render() {
     el.dataset.state = state;
@@ -54,7 +58,7 @@ export function mountAsyncButton(root, options = {}) {
     } else {
       el.removeAttribute("aria-disabled");
     }
-    readout.textContent = `state: ${state}`;
+    if (readout) readout.textContent = `state: ${state}`;
 
     if (state === "loading") {
       icon.className = "ms-btn__icon ms-spinner";
@@ -96,18 +100,38 @@ export function mountAsyncButton(root, options = {}) {
     render();
     spin();
 
-    await new Promise((resolve) => {
-      timer = setTimeout(resolve, succeedAfter);
-    });
+    // Two paths, one state machine:
+    //
+    //   options.action  a real async function supplied by the caller. This is
+    //                   what a production page uses; the component owns busy /
+    //                   aria-busy / success / error and the page owns the I/O.
+    //   succeedAfter    a simulated request, kept so the lab and the docs can
+    //                   demonstrate the states without a network.
+    //
+    // A rejected action is an error state, not an unhandled rejection: the whole
+    // point of the component is that failure is a designed state.
+    let failed = fail || options.failMode === true;
+    if (options.action) {
+      try {
+        await options.action();
+      } catch (err) {
+        failed = true;
+        options.onError?.(err);
+      }
+    } else {
+      await new Promise((resolve) => {
+        timer = setTimeout(resolve, succeedAfter);
+      });
+    }
 
     stopSpin();
-    state = fail ? "error" : "success";
+    state = failed ? "error" : "success";
     render();
 
-    const frames = keyframesFor(fail ? "shake" : "check", holder.spec);
+    const frames = keyframesFor(failed ? "shake" : "check", holder.spec);
     holder.play(icon, frames, { key: "result" });
 
-    if (fail) {
+    if (failed) {
       announce(`${label} failed. Please try again.`, { assertive: true });
     } else {
       announce(`${label} succeeded.`);
@@ -128,7 +152,9 @@ export function mountAsyncButton(root, options = {}) {
     run({ fail: ev.shiftKey });
   });
 
-  root.append(stage, hint, readout);
+  root.append(stage);
+  if (hint) root.append(hint);
+  if (readout) root.append(readout);
   render();
 
   return {
@@ -146,8 +172,8 @@ export function mountAsyncButton(root, options = {}) {
       clearTimeout(timer);
       stopSpin();
       stage.remove();
-      hint.remove();
-      readout.remove();
+      hint?.remove();
+      readout?.remove();
     },
   };
 }

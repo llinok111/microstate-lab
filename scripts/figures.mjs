@@ -431,6 +431,35 @@ if (!CHECK_ONLY) {
     await page.close();
   }
 
+  // 7 -------------------------------------------------------- declarative ---
+  // The v0.2 headline: a page with no mount() calls, only attributes. Captured
+  // from the real page, cropped to the first two sections plus their source
+  // snippets so the "attributes are the configuration" claim is visible.
+  {
+    const page = await browser.newPage({ viewport: { width: 1100, height: 900 }, deviceScaleFactor: 2 });
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await page.goto(pathToFileURL(path.resolve("demo/declarative.html")).href, { waitUntil: "load" });
+    await page.waitForTimeout(700);
+
+    const clip = await page.evaluate(() => {
+      const sections = [...document.querySelectorAll("main > section")].slice(0, 3);
+      const rects = sections.map((s) => s.getBoundingClientRect());
+      const left = Math.min(...rects.map((r) => r.left));
+      const right = Math.max(...rects.map((r) => r.right));
+      const top = Math.min(...rects.map((r) => r.top));
+      const bottom = Math.max(...rects.map((r) => r.bottom));
+      return {
+        x: Math.max(0, Math.round(left) - 16),
+        y: Math.max(0, Math.round(top + window.scrollY) - 12),
+        width: Math.round(right - left) + 32,
+        height: Math.round(bottom - top) + 24,
+      };
+    });
+
+    await webp(await shot(page, "declarative", clip), "declarative.webp", 1100);
+    await page.close();
+  }
+
   await browser.close();
   console.log("\nfigures written to docs/img/");
 }
@@ -458,6 +487,7 @@ const INK_FLOOR = {
   "families.webp": 0.2,
   "states.webp": 0.2,
   "mobile.webp": 1.5,
+  "declarative.webp": 3.0,
   "controls.webp": 2.0,
   "overview.webp": 3.0,
   "export.webp": 20,

@@ -56,3 +56,22 @@ export { mountSwitch } from "./components/switch.js";
 export { mountDragSort } from "./components/drag-sort.js";
 export { mountErrorFeedback, mountToast } from "./components/feedback.js";
 export { announce } from "./components/base.js";
+
+// Preferences: the site's own reduced-motion setting. Asymmetric by design —
+// a stored preference can add restraint but never lift an OS reduce.
+export {
+  resolvePreference,
+  readPreference,
+  writePreference,
+  watchPreference,
+  persist,
+  restore,
+  forget,
+  PREF_VALUES,
+} from "./core/preferences.js";
+
+// The declarative runtime and the custom elements live in their own entry
+// points (`microstate-lab/auto`, `microstate-lab/elements`) rather than being
+// re-exported here. Re-exporting pulled both into the main bundle and grew it
+// from 72 KB to 94 KB, so a consumer who only wanted `mountPress` paid for a
+// MutationObserver and nine custom-element classes.

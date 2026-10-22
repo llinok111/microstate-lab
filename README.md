@@ -42,6 +42,25 @@ The lab exists to make those distinctions visible and measurable, not to collect
 
 ## Quick start
 
+Two ways in. The first needs no JavaScript at all.
+
+```html
+<link rel="stylesheet" href="dist/microstate.css">
+<script type="module" src="dist/microstate-auto.js"></script>
+
+<button data-ms="press" data-ms-duration="180" data-ms-easing="ease-out">Continue</button>
+<button data-ms="switch" data-ms-persist="autosave">Auto-save</button>
+<button data-ms="async-button" data-ms-action="save">Save changes</button>
+```
+
+```js
+import { registerAction } from "dist/microstate-auto.js";
+// The component owns busy / success / error and the ARIA; you own the request.
+registerAction("save", () => fetch("/api/save", { method: "POST" }));
+```
+
+Everything marked `data-ms` is mounted, including nodes added later. Or use the programmatic API when you need the handles:
+
 ```bash
 npm install
 npm run build          # dist/ + mirrored bundles into demo/
@@ -51,14 +70,38 @@ Then open `demo/index.html` — directly from the filesystem works, no server re
 
 | Command | What it runs |
 |---|---|
-| `npm test` | 74 unit tests: easing maths, motion plans, export generation, stylesheet coverage |
-| `npm run test:browser` | 67 browser tests: real pointer/keyboard interaction, a11y audit, export runtime |
+| `npm test` | 94 unit tests: easing maths, motion plans, exports, stylesheet coverage, preferences |
+| `npm run test:browser` | 85 browser tests: real pointer/keyboard/touch, a11y audit, export runtime, declarative runtime |
 | `npm run build -- --report` | Bundle sizes and gzip deltas |
 | `npm run figures` | Regenerate the README images from the running page |
 | `npm run figures:check` | Re-verify them: dimensions, ink coverage, per-tile content |
+| `npm run cli -- list` | Presets with their resolved timings |
+| `npm run cli -- css press-soft -o out.css` | Generate a stylesheet from the command line |
 | `npm run pack` | Release ZIP (no `node_modules`, no git) |
 
 The figures are generated, not drawn — `scripts/figures.mjs` drives the real demo at 2x and crops to the measured content box. `figures:check` exists because the first version of that script painted a rounded-rect *over* every tile and produced six blank images that the aggregate ink statistic happily passed; the check now extracts each cell of each collage and fails if a tile has no picture in it.
+
+---
+
+## What changed in v0.2
+
+<img src="docs/img/declarative.webp" alt="A page of components driven entirely by data-ms attributes, with the markup shown above each example" width="100%">
+
+*`demo/declarative.html`, captured from the running page. The only script is the runtime — there is no `mountPress()` call anywhere in it, and the consumer's own `class` survives on the mounted control.*
+
+v0.1 answered "what should this interaction feel like". v0.2 answers "how does this get into a page without rewriting it". Each item below closes a limitation that `docs/LIMITS.md` had listed against the previous version.
+
+| | v0.1 | v0.2 |
+|---|---|---|
+| Using it | Call `mountPress(el, …)` per element | `data-ms` attributes, or `<ms-button>` |
+| Nodes added later | Re-scan by hand | `MutationObserver`, coalesced to one frame |
+| Async request | Simulated timer only | `registerAction()` — the page owns the I/O |
+| Reduced motion | OS setting only | OS setting **+** a stored preference that can only add restraint |
+| Switch state | In memory | Opt-in `data-ms-persist`, survives reload |
+| Spring duration | A slider that rescaled the physics | `duration: "auto"` = the settle time; pinning it is reported as a rescaling |
+| Touch drag | `touch-action: none`, fought the scroll | Long-press to arm, `pan-y`, edge auto-scroll |
+| Export | One preset per file | `exportBundle()` + a CLI (`bundle config.json`) |
+| Sharing a config | Copy JSON | Deep link: the URL *is* the config |
 
 ---
 
@@ -257,9 +300,16 @@ They are included because a lab that only demonstrates the good path teaches not
 | `motion.test.mjs` | 24 | Reduced-motion strategies, clamping honesty, keyframe validity |
 | `export.test.mjs` | 26 | Generated CSS parses and matches the plan, all targets well-formed |
 | `styles.test.mjs` | 3 | No class used without a rule, no dead rules, balanced braces |
+| `preferences.test.mjs` | 20 | The OS always beats a stored preference; spring duration; bundle export |
 | `browser.test.mjs` | 39 | Real pointer/keyboard interaction, async state machine, drag, export panel |
 | `a11y.test.mjs` | 17 | Real OS reduce, ARIA tree, focus rings via keyboard, contrast |
 | `export-runtime.test.mjs` | 11 | Exported HTML loads in Chrome and animates when clicked |
+| `runtime.test.mjs` | 18 | Declarative mounting, no nested buttons, observer, touch long-press |
+
+179 tests total. The v0.2 suites are adversarial by design: the runtime tests exist
+because the first implementation nested `<button>` inside `<button>`, and the
+preference tests iterate every stored value against an OS reduce to prove none of
+them can lift it.
 
 ---
 

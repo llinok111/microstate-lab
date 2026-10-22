@@ -144,3 +144,70 @@ During development, five classes referenced by components had no rules: `.ms-con
 - **A timeline editor.** Sequencing is a different problem from micro-interaction design, and bundling it would triple the surface area.
 - **React/Vue wrappers.** The component contract (`mount` → `setMotion` / `destroy`) is small enough to wrap in ten lines; shipping four framework bindings would age badly.
 - **A preset marketplace.** The registry is a plain array. Making it data-driven was a choice; making it a service would not be.
+
+
+---
+
+## 11. Why the declarative runtime replaces rather than nests
+
+`<button data-ms="press">` could be handled two ways: append the component's
+button inside it, or replace it.
+
+Nesting is the obvious choice — the consumer's element stays, their CSS keeps
+matching, nothing moves. It is also invalid HTML and quietly broken: the inner
+`<button>` is not focusable in Safari, form participation attaches to the outer
+element, and a click on the inner button bubbles to an outer one that also has
+listeners. All three symptoms surface as "sometimes the button does not work",
+which is the worst kind of bug report.
+
+Replacement costs one thing: a reference captured before boot now points at a
+detached node. Everything else is recoverable — the attribute loop copies `id`,
+`name`, `aria-label`, the author's classes, and the `data-ms-*` config — so the
+only rule a consumer has to learn is "query after `start()`".
+
+The runtime keeps a `data-ms-bound` marker on the replacement. Without it, the
+`MutationObserver` would re-mount the element every time anything on the page
+changed, and each mount would add another set of listeners — the classic
+observer feedback loop.
+
+## 12. Why preferences are asymmetric
+
+The natural implementation stores a tri-state (`system` / `reduce` / `allow`) and
+lets the stored value win, because a stored value is more specific than a global
+one. That reasoning is correct for almost every setting and wrong for this one.
+
+If a page stores `allow` and then ignores an OS-level reduce, it has overruled a
+decision the user made at the level where it applies system-wide. That is the
+exact complaint assistive-technology users raise about "reduce motion" toggles,
+and it happens because the tri-state model treats the two sources as peers.
+
+So the resolution order is a priority, not a merge:
+
+```
+OS reduce   -> reduced, whatever the store says
+stored reduce -> reduced
+stored allow -> motion, only because the OS expressed no preference
+```
+
+`resolvePreference` returns the `source` alongside the boolean so a UI can say
+*why* it landed where it did, and a test iterates every stored value against
+`osPrefers: true` to prove the OS always wins.
+
+## 13. A spring's duration is not a parameter
+
+The v0.1 slider let you set any duration on a spring, and the preview honoured
+it by rescaling the curve. That produces a curve that is *not* the spring you
+asked for: `spring(1, 320, 17)` settles in 487 ms, so asking for 200 ms yields
+something springing four times faster and still moving when it is cut.
+
+Three options were available:
+
+1. Ignore the slider for springs. Honest, but a control that does nothing is
+   worse than no control.
+2. Ignore the physics. Ships a lie.
+3. Make the coupling explicit: `duration: "auto"` uses the settle time, and any
+   other value is *reported as a rescaling* in the notes panel.
+
+The third is what shipped. The default for a spring preset is `"auto"`, so the
+number in the panel is the number the animation needs; pinning a value is still
+possible, and the notes say what it cost.

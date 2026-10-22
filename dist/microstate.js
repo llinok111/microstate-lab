@@ -205,12 +205,18 @@ function prefersReducedMotion(win = globalThis) {
     return false;
   }
 }
-function resolveReducedMotion({ osPrefers = false, policy = "respect" } = {}) {
+function resolveReducedMotion({ osPrefers = false, policy = "respect", pref = "system" } = {}) {
   if (policy === "ignore")
     return { reduced: false, reason: "policy:ignore" };
   if (policy === "force")
     return { reduced: true, reason: "policy:force" };
-  return osPrefers ? { reduced: true, reason: "os:prefers-reduced-motion" } : { reduced: false, reason: "os:no-preference" };
+  if (osPrefers)
+    return { reduced: true, reason: "os:prefers-reduced-motion" };
+  if (pref === "reduce")
+    return { reduced: true, reason: "preference:reduce" };
+  if (pref === "allow")
+    return { reduced: false, reason: "preference:allow" };
+  return { reduced: false, reason: "os:no-preference" };
 }
 function clamp(n, { min, max }, fallback) {
   const v = Number(n);
@@ -219,8 +225,12 @@ function clamp(n, { min, max }, fallback) {
   return Math.min(max, Math.max(min, v));
 }
 function plan(spec = {}) {
+  const wantsAuto = spec.duration === "auto";
   const requested = {
-    duration: clamp(spec.duration, LIMITS.duration, 240),
+    // `"auto"` is resolved below from the spring's physics. Clamping it here
+    // would quietly turn it into the 240 ms default and the later branch would
+    // look correct only because it happened to overwrite the value.
+    duration: wantsAuto ? null : clamp(spec.duration, LIMITS.duration, 240),
     delay: clamp(spec.delay, LIMITS.delay, 0),
     easing: spec.easing ?? "ease-out",
     trigger: spec.trigger ?? "click",
@@ -235,12 +245,34 @@ function plan(spec = {}) {
     );
   }
   const easing = parseEasing(requested.easing);
+  const notes = [];
+  const springLike = easing.kind === "spring";
+  const physical = springLike ? settleTime(easing.params ?? {}) : null;
+  let durationAuto = false;
+  if (springLike && (wantsAuto || spec.duration === void 0)) {
+    requested.duration = Math.min(LIMITS.duration.max, Math.max(1, physical));
+    durationAuto = true;
+    notes.push(
+      `spring: duration derived from its physics \u2014 \u03B6=${(easing.zeta ?? 1).toFixed(2)}, settles in ${physical}ms`
+    );
+  } else if (!springLike && requested.duration === null) {
+    requested.duration = 240;
+    notes.push('duration "auto" only applies to springs; fell back to 240ms');
+  } else if (springLike && Math.abs(requested.duration - physical) > 40) {
+    const ratio = (requested.duration / physical).toFixed(2);
+    notes.push(
+      `spring: ${requested.duration}ms vs a natural settle of ${physical}ms (\xD7${ratio}). The curve is rescaled, so it is a different spring \u2014 not a faster one.`
+    );
+  }
   const reduced = resolveReducedMotion({
     osPrefers: spec.osPrefers ?? prefersReducedMotion(),
-    policy: spec.policy ?? "respect"
+    policy: spec.policy ?? "respect",
+    // `pref` is the site's stored preference; undefined means "ask the store"
+    // only when a caller actually opted into preferences, so a unit test that
+    // passes no localStorage does not accidentally read a real one.
+    pref: spec.pref ?? "system"
   });
   const effective = { ...requested, cssEasing: easing.css };
-  const notes = [];
   const suppressed = reduced.reduced && requested.reduced !== "ignore";
   if (suppressed) {
     switch (requested.reduced) {
@@ -273,6 +305,14 @@ function plan(spec = {}) {
     osPrefers: reduced.reduced,
     reducedReason: reduced.reason,
     notes,
+    /** Natural settle time for a spring easing; null for everything else. */
+    physicalDuration: physical,
+    /** True when the duration came from the spring's physics, not the slider. */
+    durationAuto,
+    /** True when the requested duration rescaled a spring away from its physics. */
+    get springRescaled() {
+      return springLike && !durationAuto && Math.abs(effective.duration - physical) > 40;
+    },
     /** True when the plan will not visually animate. */
     get isStatic() {
       return effective.duration === 0;
@@ -535,7 +575,7 @@ var PRESETS = [
     label: "Springy press",
     effect: "press",
     description: "Underdamped spring \u2014 overshoots slightly, feels physical.",
-    motion: { duration: 420, delay: 0, easing: "spring(1, 300, 16)", reduced: "instant", trigger: "press", scale: 0.94 }
+    motion: { duration: "auto", delay: 0, easing: "spring(1, 300, 16)", reduced: "instant", trigger: "press", scale: 0.94 }
   },
   {
     id: "press-lift",
@@ -585,7 +625,7 @@ var PRESETS = [
     label: "Check pop",
     effect: "check",
     description: "Icon overshoots once, then rests. Announced via live region, focus moves to the reset action.",
-    motion: { duration: 380, delay: 0, easing: "spring(1, 260, 18)", reduced: "fade", trigger: "manual", scale: 1.08 }
+    motion: { duration: "auto", delay: 0, easing: "spring(1, 260, 18)", reduced: "fade", trigger: "manual", scale: 1.08 }
   },
   {
     id: "success-fade",
@@ -660,7 +700,7 @@ var PRESETS = [
     label: "Free drag",
     effect: "none",
     description: "1:1 pointer tracking, spring settle on release.",
-    motion: { duration: 320, delay: 0, easing: "spring(1, 220, 20)", reduced: "instant", trigger: "manual" }
+    motion: { duration: "auto", delay: 0, easing: "spring(1, 220, 20)", reduced: "instant", trigger: "manual" }
   },
   {
     id: "drag-sort",
@@ -685,7 +725,7 @@ var PRESETS = [
     label: "Switch spring",
     effect: "none",
     description: "Springy thumb with a small overshoot. Still correct at 0ms.",
-    motion: { duration: 380, delay: 0, easing: "spring(1, 320, 17)", reduced: "instant", trigger: "click" }
+    motion: { duration: "auto", delay: 0, easing: "spring(1, 320, 17)", reduced: "instant", trigger: "click" }
   },
   {
     id: "toggle-delayed",
@@ -1325,8 +1365,8 @@ function mountAsyncButton(root, options = {}) {
   const text = h("span", { class: "ms-btn__label", text: label });
   const el = h("button", { class: "ms-btn ms-btn--primary ms-async", type: "button" }, [icon, text]);
   const stage = h("div", { class: "ms-stage ms-stage--center" }, [el]);
-  const hint = h("p", { class: "ms-hint", text: "Runs a fake 400ms request, then confirms. Shift-click to force a failure." });
-  const readout = h("p", { class: "ms-readout", "aria-live": "off", text: "state: idle" });
+  const hint = options.action ? null : h("p", { class: "ms-hint", text: "Runs a fake 400ms request, then confirms. Shift-click to force a failure." });
+  const readout = options.action ? null : h("p", { class: "ms-readout", "aria-live": "off", text: "state: idle" });
   function render() {
     el.dataset.state = state;
     el.setAttribute("aria-busy", state === "loading" ? "true" : "false");
@@ -1335,7 +1375,8 @@ function mountAsyncButton(root, options = {}) {
     } else {
       el.removeAttribute("aria-disabled");
     }
-    readout.textContent = `state: ${state}`;
+    if (readout)
+      readout.textContent = `state: ${state}`;
     if (state === "loading") {
       icon.className = "ms-btn__icon ms-spinner";
       text.textContent = "Saving\u2026";
@@ -1373,15 +1414,25 @@ function mountAsyncButton(root, options = {}) {
     state = "loading";
     render();
     spin();
-    await new Promise((resolve) => {
-      timer = setTimeout(resolve, succeedAfter);
-    });
+    let failed = fail || options.failMode === true;
+    if (options.action) {
+      try {
+        await options.action();
+      } catch (err) {
+        failed = true;
+        options.onError?.(err);
+      }
+    } else {
+      await new Promise((resolve) => {
+        timer = setTimeout(resolve, succeedAfter);
+      });
+    }
     stopSpin();
-    state = fail ? "error" : "success";
+    state = failed ? "error" : "success";
     render();
-    const frames = keyframesFor(fail ? "shake" : "check", holder.spec);
+    const frames = keyframesFor(failed ? "shake" : "check", holder.spec);
     holder.play(icon, frames, { key: "result" });
-    if (fail) {
+    if (failed) {
       announce(`${label} failed. Please try again.`, { assertive: true });
     } else {
       announce(`${label} succeeded.`);
@@ -1398,7 +1449,11 @@ function mountAsyncButton(root, options = {}) {
       return;
     run({ fail: ev.shiftKey });
   });
-  root.append(stage, hint, readout);
+  root.append(stage);
+  if (hint)
+    root.append(hint);
+  if (readout)
+    root.append(readout);
   render();
   return {
     el: stage,
@@ -1415,8 +1470,8 @@ function mountAsyncButton(root, options = {}) {
       clearTimeout(timer);
       stopSpin();
       stage.remove();
-      hint.remove();
-      readout.remove();
+      hint?.remove();
+      readout?.remove();
     }
   };
 }
@@ -1818,19 +1873,28 @@ function mountSwitch(root, options = {}) {
 }
 
 // src/components/drag-sort.js
+var ARM_SLOP = 10;
+var ARM_DELAY = 260;
 function mountDragSort(root, options = {}) {
   const { items = ["Draft", "In review", "Approved", "Published"] } = options;
   let easing = options.easing ?? "cubic-bezier(.2,.8,.2,1)";
   let duration = options.duration ?? 220;
+  const longPress = options.longPress ?? ARM_DELAY;
+  const handleOnly = options.handleOnly === true;
   let order = items.slice();
   const original = items.slice();
   const list = h("ul", { class: "ms-draglist", role: "list" });
   const readout = h("p", { class: "ms-readout", "aria-live": "off", text: `order: ${order.join(" \u2192 ")}` });
   let dragEl = null;
   let startY = 0;
+  let startX = 0;
   let startIndex = -1;
   let currentIndex = -1;
   let grabbed = null;
+  let armTimer = null;
+  let pendingItem = null;
+  let armed = false;
+  let autoScrollRaf = 0;
   const rows = /* @__PURE__ */ new Map();
   function makeRow(label) {
     const handle = h("span", { class: "ms-draglist__handle", "aria-hidden": "true" });
@@ -1871,10 +1935,7 @@ function mountDragSort(root, options = {}) {
     }
     return true;
   }
-  function onPointerDown(ev) {
-    const item = ev.target.closest(".ms-draglist__item");
-    if (!item)
-      return;
+  function begin(item, ev) {
     dragEl = item;
     startY = ev.clientY;
     startIndex = Number(item.dataset.index);
@@ -1883,11 +1944,53 @@ function mountDragSort(root, options = {}) {
     item.setPointerCapture?.(ev.pointerId);
     announce(`Picked up ${item.dataset.label}, position ${startIndex + 1} of ${order.length}`);
   }
+  function armTimerStart(item, ev) {
+    pendingItem = item;
+    startX = ev.clientX;
+    startY = ev.clientY;
+    armTimer = setTimeout(() => {
+      armTimer = null;
+      armed = true;
+      pendingItem.classList.add("is-armed");
+      globalThis.navigator?.vibrate?.(12);
+      begin(pendingItem, { clientY: startY, pointerId: ev.pointerId });
+      announce(`Dragging ${pendingItem.dataset.label}. Move to reorder, release to drop.`);
+    }, longPress);
+  }
+  function disarm() {
+    clearTimeout(armTimer);
+    armTimer = null;
+    pendingItem?.classList.remove("is-armed");
+    pendingItem = null;
+    armed = false;
+  }
+  function onPointerDown(ev) {
+    if (ev.isPrimary === false)
+      return;
+    const item = ev.target.closest(".ms-draglist__item");
+    if (!item)
+      return;
+    if (handleOnly && !ev.target.closest(".ms-draglist__handle"))
+      return;
+    if (ev.pointerType === "touch") {
+      armTimerStart(item, ev);
+      return;
+    }
+    begin(item, ev);
+  }
   function onPointerMove(ev) {
+    if (armTimer && pendingItem) {
+      const dy2 = Math.abs(ev.clientY - startY);
+      const dx = Math.abs(ev.clientX - startX);
+      if (dy2 > ARM_SLOP || dx > ARM_SLOP)
+        disarm();
+      return;
+    }
     if (!dragEl)
       return;
     const dy = ev.clientY - startY;
     dragEl.style.transform = `translateY(${dy}px)`;
+    autoScroll(ev.clientY);
     const items_ = [...list.children];
     const target = items_.findIndex((el) => {
       if (el === dragEl)
@@ -1901,10 +2004,50 @@ function mountDragSort(root, options = {}) {
       startY = ev.clientY;
     }
   }
+  function autoScroll(clientY) {
+    const scrollerEl = findScroller(list);
+    if (!scrollerEl)
+      return;
+    const rect = scrollerEl === document.scrollingElement ? null : scrollerEl.getBoundingClientRect();
+    const top = rect ? rect.top : 0;
+    const bottom = rect ? rect.bottom : window.innerHeight;
+    const band = 56;
+    let delta = 0;
+    if (clientY < top + band)
+      delta = -Math.min(14, (top + band - clientY) / 3);
+    else if (clientY > bottom - band)
+      delta = Math.min(14, (clientY - (bottom - band)) / 3);
+    cancelAnimationFrame(autoScrollRaf);
+    if (!delta)
+      return;
+    const step = () => {
+      scrollerEl.scrollBy(0, delta);
+      autoScrollRaf = requestAnimationFrame(() => {
+        if (dragEl)
+          step();
+      });
+    };
+    autoScrollRaf = requestAnimationFrame(step);
+  }
+  function findScroller(el) {
+    let node = el.parentElement;
+    while (node && node !== document.body) {
+      const cs = getComputedStyle(node);
+      if (/(auto|scroll)/.test(cs.overflowY) && node.scrollHeight > node.clientHeight)
+        return node;
+      node = node.parentElement;
+    }
+    return document.scrollingElement || null;
+  }
   function onPointerUp() {
+    cancelAnimationFrame(autoScrollRaf);
+    if (armTimer) {
+      disarm();
+      return;
+    }
     if (!dragEl)
       return;
-    dragEl.classList.remove("is-dragging");
+    dragEl.classList.remove("is-dragging", "is-armed");
     dragEl.style.transform = "";
     if (currentIndex !== startIndex) {
       announce(`Dropped ${dragEl.dataset.label} at position ${currentIndex + 1} of ${order.length}`);
@@ -1912,6 +2055,7 @@ function mountDragSort(root, options = {}) {
     dragEl = null;
     startIndex = -1;
     currentIndex = -1;
+    armed = false;
   }
   function onKeyDown(ev) {
     const item = ev.target.closest(".ms-draglist__item");
@@ -1977,6 +2121,8 @@ function mountDragSort(root, options = {}) {
       return { order: order.slice(), grabbed };
     },
     destroy() {
+      clearTimeout(armTimer);
+      cancelAnimationFrame(autoScrollRaf);
       list.removeEventListener("pointerdown", onPointerDown);
       list.removeEventListener("pointermove", onPointerMove);
       list.removeEventListener("pointerup", onPointerUp);
@@ -2174,10 +2320,122 @@ function mountToast(root, options = {}) {
     }
   };
 }
+
+// src/core/preferences.js
+var KEY = "ms:pref:reduced";
+var PREF_VALUES = ["system", "reduce", "allow"];
+function storage(kind = "localStorage") {
+  try {
+    const s = globalThis[kind];
+    if (!s)
+      return null;
+    const probe = "__ms_probe__";
+    s.setItem(probe, "1");
+    s.removeItem(probe);
+    return s;
+  } catch {
+    return null;
+  }
+}
+function resolvePreference({ osPrefers = false, stored = "system" } = {}) {
+  const pref = PREF_VALUES.includes(stored) ? stored : "system";
+  if (osPrefers)
+    return { reduced: true, source: "os", pref };
+  if (pref === "reduce")
+    return { reduced: true, source: "preference", pref };
+  if (pref === "allow")
+    return { reduced: false, source: "preference", pref };
+  return { reduced: false, source: "default", pref };
+}
+function readPreference(kind = "localStorage") {
+  const s = storage(kind);
+  if (!s)
+    return "system";
+  try {
+    const v = s.getItem(KEY);
+    return PREF_VALUES.includes(v) ? v : "system";
+  } catch {
+    return "system";
+  }
+}
+function writePreference(value, kind = "localStorage") {
+  if (!PREF_VALUES.includes(value))
+    throw new Error(`Unknown preference: ${value}`);
+  const s = storage(kind);
+  if (!s)
+    return false;
+  try {
+    if (value === "system")
+      s.removeItem(KEY);
+    else
+      s.setItem(KEY, value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+function watchPreference(onChange, win = globalThis) {
+  const cleanups = [];
+  if (win?.matchMedia) {
+    const mq = win.matchMedia("(prefers-reduced-motion: reduce)");
+    const handler = () => onChange(resolvePreference({ osPrefers: mq.matches, stored: readPreference() }));
+    mq.addEventListener?.("change", handler);
+    cleanups.push(() => mq.removeEventListener?.("change", handler));
+  }
+  if (win?.addEventListener) {
+    const handler = (ev) => {
+      if (ev.key !== KEY && ev.key !== null)
+        return;
+      const s = storage();
+      const osPrefers = win.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false;
+      onChange(resolvePreference({ osPrefers, stored: readPreference() }));
+    };
+    win.addEventListener("storage", handler);
+    cleanups.push(() => win.removeEventListener("storage", handler));
+  }
+  return () => cleanups.forEach((fn) => fn());
+}
+function persist(key, value) {
+  const s = storage();
+  if (!s)
+    return false;
+  try {
+    s.setItem(`ms:state:${key}`, JSON.stringify({ v: 1, value }));
+    return true;
+  } catch {
+    return false;
+  }
+}
+function restore(key, fallback = null) {
+  const s = storage();
+  if (!s)
+    return fallback;
+  try {
+    const raw = s.getItem(`ms:state:${key}`);
+    if (!raw)
+      return fallback;
+    const parsed = JSON.parse(raw);
+    return parsed?.v === 1 ? parsed.value : fallback;
+  } catch {
+    return fallback;
+  }
+}
+function forget(key) {
+  const s = storage();
+  if (!s)
+    return false;
+  try {
+    s.removeItem(`ms:state:${key}`);
+    return true;
+  } catch {
+    return false;
+  }
+}
 export {
   FAMILIES,
   INTERRUPT_POLICIES,
   LIMITS,
+  PREF_VALUES,
   PRESETS,
   REDUCED_MOTION_POLICY,
   REDUCED_MOTION_STRATEGIES,
@@ -2192,6 +2450,7 @@ export {
   exportCss,
   exportJs,
   exportStandaloneHtml,
+  forget,
   getPreset,
   isCounterExample,
   keyframesFor,
@@ -2207,18 +2466,24 @@ export {
   mountToast,
   overshoot,
   parseEasing,
+  persist,
   plan,
   play,
   prefersReducedMotion,
   presetKeyframes,
   presetsByFamily,
+  readPreference,
   reducedMotionCss,
+  resolvePreference,
   resolveReducedMotion,
+  restore,
   sample,
   settleTime,
   spring,
   steps,
   summarize,
   supportsLinearEasing,
-  toLinear
+  toLinear,
+  watchPreference,
+  writePreference
 };

@@ -296,7 +296,12 @@
   display: grid;
   gap: 8px;
   width: min(340px, 100%);
-  touch-action: none;
+  touch-action: pan-y;
+}
+.ms-draglist__item.is-armed {
+  border-color: var(--ms-accent);
+  box-shadow: 0 6px 18px rgb(43 38 34 / 0.16);
+  cursor: grabbing;
 }
 .ms-draglist__item {
   display: flex;

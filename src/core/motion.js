@@ -63,18 +63,24 @@ export function prefersReducedMotion(win = globalThis) {
 }
 
 /**
- * Decide whether motion should be reduced, given the OS setting and the lab's
- * policy override.
+ * Decide whether motion should be reduced, given the OS setting, the site's
+ * stored preference, and the lab's policy override.
+ *
+ * The asymmetry is the point: a stored preference can *add* restraint but never
+ * lift it. See `core/preferences.js` for why.
  *
  * Returns a plain boolean plus the reason, so the UI can *explain* why the
  * preview is behaving differently instead of silently changing.
  */
-export function resolveReducedMotion({ osPrefers = false, policy = "respect" } = {}) {
+export function resolveReducedMotion({ osPrefers = false, policy = "respect", pref = "system" } = {}) {
   if (policy === "ignore") return { reduced: false, reason: "policy:ignore" };
   if (policy === "force") return { reduced: true, reason: "policy:force" };
-  return osPrefers
-    ? { reduced: true, reason: "os:prefers-reduced-motion" }
-    : { reduced: false, reason: "os:no-preference" };
+
+  // An OS reduce is not negotiable — checked before the stored preference.
+  if (osPrefers) return { reduced: true, reason: "os:prefers-reduced-motion" };
+  if (pref === "reduce") return { reduced: true, reason: "preference:reduce" };
+  if (pref === "allow") return { reduced: false, reason: "preference:allow" };
+  return { reduced: false, reason: "os:no-preference" };
 }
 
 function clamp(n, { min, max }, fallback) {
@@ -100,8 +106,12 @@ function clamp(n, { min, max }, fallback) {
  * from the request, which is the only honest way to report a downgrade.
  */
 export function plan(spec = {}) {
+  const wantsAuto = spec.duration === "auto";
   const requested = {
-    duration: clamp(spec.duration, LIMITS.duration, 240),
+    // `"auto"` is resolved below from the spring's physics. Clamping it here
+    // would quietly turn it into the 240 ms default and the later branch would
+    // look correct only because it happened to overwrite the value.
+    duration: wantsAuto ? null : clamp(spec.duration, LIMITS.duration, 240),
     delay: clamp(spec.delay, LIMITS.delay, 0),
     easing: spec.easing ?? "ease-out",
     trigger: spec.trigger ?? "click",
@@ -120,13 +130,56 @@ export function plan(spec = {}) {
   // Parse eagerly: an invalid easing should fail at plan time, not mid-flight.
   const easing = parseEasing(requested.easing);
 
+  const notes = [];
+
+  // ---------------------------------------------------------------- spring --
+  //
+  // A spring's shape and its duration are coupled: the curve is defined on
+  // 0..1, so stretching the duration stretches the physics. Asking for a 380 ms
+  // spring whose parameters settle in 487 ms does not produce a faster spring —
+  // it produces a *different* spring that is still springing at the cut.
+  //
+  // Two honest options, and no third:
+  //   duration: "auto"  -> use the settle time; the physics is what you get
+  //   duration: <number> -> keep the number, and say the curve was rescaled
+  //
+  // The lab defaults to "auto" for spring presets so the number in the panel is
+  // the number the animation actually needs.
+  const springLike = easing.kind === "spring";
+  const physical = springLike ? settleTime(easing.params ?? {}) : null;
+  let durationAuto = false;
+
+  if (springLike && (wantsAuto || spec.duration === undefined)) {
+    // Nothing pinned the duration, or the caller explicitly asked for the
+    // physical one: use the settle time.
+    requested.duration = Math.min(LIMITS.duration.max, Math.max(1, physical));
+    durationAuto = true;
+    notes.push(
+      `spring: duration derived from its physics — ζ=${(easing.zeta ?? 1).toFixed(2)}, settles in ${physical}ms`
+    );
+  } else if (!springLike && requested.duration === null) {
+    // "auto" on a non-spring easing is meaningless; say so instead of silently
+    // substituting a number the caller never chose.
+    requested.duration = 240;
+    notes.push('duration "auto" only applies to springs; fell back to 240ms');
+  } else if (springLike && Math.abs(requested.duration - physical) > 40) {
+    const ratio = (requested.duration / physical).toFixed(2);
+    notes.push(
+      `spring: ${requested.duration}ms vs a natural settle of ${physical}ms (×${ratio}). ` +
+        `The curve is rescaled, so it is a different spring — not a faster one.`
+    );
+  }
+
   const reduced = resolveReducedMotion({
     osPrefers: spec.osPrefers ?? prefersReducedMotion(),
     policy: spec.policy ?? "respect",
+    // `pref` is the site's stored preference; undefined means "ask the store"
+    // only when a caller actually opted into preferences, so a unit test that
+    // passes no localStorage does not accidentally read a real one.
+    pref: spec.pref ?? "system",
   });
 
   const effective = { ...requested, cssEasing: easing.css };
-  const notes = [];
 
   // `reduced` on the plan means "motion was actually suppressed", not "the OS
   // asked for it". A preset with `reduced: "ignore"` animates normally even on a
@@ -166,6 +219,14 @@ export function plan(spec = {}) {
     osPrefers: reduced.reduced,
     reducedReason: reduced.reason,
     notes,
+    /** Natural settle time for a spring easing; null for everything else. */
+    physicalDuration: physical,
+    /** True when the duration came from the spring's physics, not the slider. */
+    durationAuto,
+    /** True when the requested duration rescaled a spring away from its physics. */
+    get springRescaled() {
+      return springLike && !durationAuto && Math.abs(effective.duration - physical) > 40;
+    },
     /** True when the plan will not visually animate. */
     get isStatic() {
       return effective.duration === 0;

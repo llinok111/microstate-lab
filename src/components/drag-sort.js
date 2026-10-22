@@ -14,14 +14,44 @@
  * State is announced through a live region ("Picked up Item 2 of 4", "Moved to
  * position 3"). Without that, a keyboard user can reorder the list and never
  * learn what happened.
+ *
+ * ## Touch
+ *
+ * Touch is not "a pointer with a finger". The naive implementation — drag from
+ * the moment the finger lands — makes the list unusable on a phone, because a
+ * finger that starts on a row can no longer scroll the page: the drag wins the
+ * gesture and the list fights the scroll.
+ *
+ * Three changes make it work:
+ *
+ *   1. **Long-press to arm.** A touch drag begins only after the finger has
+ *      stayed within a small radius for `longPress` ms. Before that, the touch
+ *      is still "undecided" and `touch-action: pan-y` lets the browser scroll
+ *      normally.
+ *   2. **Cancel on early movement.** If the finger travels before the timer
+ *      fires, the potential drag is abandoned and the gesture belongs to the
+ *      page.
+ *   3. **Haptic-ish feedback.** At arm time the row lifts and vibrates briefly
+ *      (where supported), so the user knows the mode changed. Without a cue,
+ *      long-press feels like nothing happened.
+ *
+ * `touch-action` therefore switches from `none` to `pan-y` on the list, and the
+ * arming step is what distinguishes intent.
  */
 
 import { h, announce } from "./base.js";
+
+/** Movement (px) that cancels a pending long-press drag. */
+const ARM_SLOP = 10;
+/** Default hold time before a touch drag arms. */
+const ARM_DELAY = 260;
 
 export function mountDragSort(root, options = {}) {
   const { items = ["Draft", "In review", "Approved", "Published"] } = options;
   let easing = options.easing ?? "cubic-bezier(.2,.8,.2,1)";
   let duration = options.duration ?? 220;
+  const longPress = options.longPress ?? ARM_DELAY;
+  const handleOnly = options.handleOnly === true;
 
   let order = items.slice();
   const original = items.slice();
@@ -31,9 +61,17 @@ export function mountDragSort(root, options = {}) {
 
   let dragEl = null;
   let startY = 0;
+  let startX = 0;
   let startIndex = -1;
   let currentIndex = -1;
   let grabbed = null;
+
+  // Touch arming state. `pointerType === "touch"` takes the long-press path;
+  // mouse and pen drag immediately, which is what people expect with a mouse.
+  let armTimer = null;
+  let pendingItem = null;
+  let armed = false;
+  let autoScrollRaf = 0;
 
   // Rows are created once and reused. Rebuilding them on every move was the
   // original implementation and it silently broke keyboard reordering: removing
@@ -90,9 +128,12 @@ export function mountDragSort(root, options = {}) {
   }
 
   // ---------------------------------------------------------------- pointer --
-  function onPointerDown(ev) {
-    const item = ev.target.closest(".ms-draglist__item");
-    if (!item) return;
+  //
+  // The pointer path branches on `pointerType` rather than on a separate touch
+  // listener, because Pointer Events unify them and splitting the logic into two
+  // handlers is how "works on desktop, broken on phone" happens.
+
+  function begin(item, ev) {
     dragEl = item;
     startY = ev.clientY;
     startIndex = Number(item.dataset.index);
@@ -102,10 +143,66 @@ export function mountDragSort(root, options = {}) {
     announce(`Picked up ${item.dataset.label}, position ${startIndex + 1} of ${order.length}`);
   }
 
+  function armTimerStart(item, ev) {
+    pendingItem = item;
+    startX = ev.clientX;
+    startY = ev.clientY;
+    armTimer = setTimeout(() => {
+      armTimer = null;
+      armed = true;
+      // The visual lift is the cue that the mode changed. Without it, a
+      // long-press that arms silently feels like nothing happened, and the user
+      // lifts their finger right before the drag would have started.
+      pendingItem.classList.add("is-armed");
+      globalThis.navigator?.vibrate?.(12);
+      begin(pendingItem, { clientY: startY, pointerId: ev.pointerId });
+      announce(`Dragging ${pendingItem.dataset.label}. Move to reorder, release to drop.`);
+    }, longPress);
+  }
+
+  function disarm() {
+    clearTimeout(armTimer);
+    armTimer = null;
+    pendingItem?.classList.remove("is-armed");
+    pendingItem = null;
+    armed = false;
+  }
+
+  function onPointerDown(ev) {
+    if (ev.isPrimary === false) return;
+    const item = ev.target.closest(".ms-draglist__item");
+    if (!item) return;
+    // Handle-only mode: the row body stays a scroll surface and only the grip
+    // starts a drag. This is the safer default for long lists on touch.
+    if (handleOnly && !ev.target.closest(".ms-draglist__handle")) return;
+
+    if (ev.pointerType === "touch") {
+      // Do not start yet: the same finger might be about to scroll.
+      armTimerStart(item, ev);
+      return;
+    }
+
+    begin(item, ev);
+  }
+
   function onPointerMove(ev) {
+    // Undecided touch: cancel the pending drag as soon as the finger proves it
+    // is scrolling, and let the browser have the gesture.
+    if (armTimer && pendingItem) {
+      const dy = Math.abs(ev.clientY - startY);
+      const dx = Math.abs(ev.clientX - startX);
+      if (dy > ARM_SLOP || dx > ARM_SLOP) disarm();
+      return;
+    }
+
     if (!dragEl) return;
+
     const dy = ev.clientY - startY;
     dragEl.style.transform = `translateY(${dy}px)`;
+
+    // Edge auto-scroll: without it, reordering past the visible band is
+    // impossible on a phone, because the drag cannot move the page.
+    autoScroll(ev.clientY);
 
     const items_ = [...list.children];
     const target = items_.findIndex((el) => {
@@ -120,9 +217,60 @@ export function mountDragSort(root, options = {}) {
     }
   }
 
+  /**
+   * Scroll the nearest scrollable ancestor while the pointer sits near an edge.
+   *
+   * Deliberately conservative: a 56px band and a maximum of 14px per frame.
+   * A faster scroll makes it impossible to aim, which is the usual outcome of
+   * "helpful" auto-scroll implementations.
+   */
+  function autoScroll(clientY) {
+    const scrollerEl = findScroller(list);
+    if (!scrollerEl) return;
+
+    const rect = scrollerEl === document.scrollingElement ? null : scrollerEl.getBoundingClientRect();
+    const top = rect ? rect.top : 0;
+    const bottom = rect ? rect.bottom : window.innerHeight;
+    const band = 56;
+
+    let delta = 0;
+    if (clientY < top + band) delta = -Math.min(14, (top + band - clientY) / 3);
+    else if (clientY > bottom - band) delta = Math.min(14, (clientY - (bottom - band)) / 3);
+
+    cancelAnimationFrame(autoScrollRaf);
+    if (!delta) return;
+
+    const step = () => {
+      scrollerEl.scrollBy(0, delta);
+      // Re-aim each frame: the pointer may have moved back into the middle.
+      autoScrollRaf = requestAnimationFrame(() => {
+        if (dragEl) step();
+      });
+    };
+    autoScrollRaf = requestAnimationFrame(step);
+  }
+
+  function findScroller(el) {
+    let node = el.parentElement;
+    while (node && node !== document.body) {
+      const cs = getComputedStyle(node);
+      if (/(auto|scroll)/.test(cs.overflowY) && node.scrollHeight > node.clientHeight) return node;
+      node = node.parentElement;
+    }
+    return document.scrollingElement || null;
+  }
+
   function onPointerUp() {
+    cancelAnimationFrame(autoScrollRaf);
+
+    if (armTimer) {
+      // Touch released before the hold completed: this was a tap, not a drag.
+      disarm();
+      return;
+    }
+
     if (!dragEl) return;
-    dragEl.classList.remove("is-dragging");
+    dragEl.classList.remove("is-dragging", "is-armed");
     dragEl.style.transform = "";
     if (currentIndex !== startIndex) {
       announce(`Dropped ${dragEl.dataset.label} at position ${currentIndex + 1} of ${order.length}`);
@@ -130,6 +278,7 @@ export function mountDragSort(root, options = {}) {
     dragEl = null;
     startIndex = -1;
     currentIndex = -1;
+    armed = false;
   }
 
   // --------------------------------------------------------------- keyboard --
@@ -205,6 +354,10 @@ export function mountDragSort(root, options = {}) {
       return { order: order.slice(), grabbed };
     },
     destroy() {
+      // Timers and rAF survive DOM removal; without this a destroyed list keeps
+      // scrolling the page from a captured pointer.
+      clearTimeout(armTimer);
+      cancelAnimationFrame(autoScrollRaf);
       list.removeEventListener("pointerdown", onPointerDown);
       list.removeEventListener("pointermove", onPointerMove);
       list.removeEventListener("pointerup", onPointerUp);

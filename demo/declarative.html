@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>microstate-lab — declarative demo</title>
+<meta name="description" content="The same component library, used without writing any JavaScript: markup declares the interaction, the runtime mounts it.">
+<link rel="icon" href="./favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="./microstate.css">
+<style>
+  :root {
+    color-scheme: light;
+    --paper: #f6f3ee;
+    --raised: #fffdfa;
+    --ink: #2b2622;
+    --ink-soft: #574e45;
+    --ink-faint: #6f6459;
+    --line: #ded4c7;
+    --accent: #b4552d;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font: 400 14px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Noto Sans SC", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  header {
+    padding: 28px 32px 22px;
+    border-bottom: 1px solid var(--line);
+    background: var(--raised);
+  }
+  header h1 { margin: 0 0 6px; font-size: 20px; letter-spacing: -0.01em; }
+  header p { margin: 0; color: var(--ink-faint); font-size: 12.5px; max-width: 62ch; }
+  header code {
+    font: 500 11.5px ui-monospace, Consolas, monospace;
+    background: #f0e9df;
+    padding: 2px 5px;
+    border-radius: 4px;
+  }
+  main { padding: 24px 32px 64px; display: grid; gap: 22px; max-width: 1100px; }
+  section {
+    background: var(--raised);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 20px 22px;
+  }
+  section > h2 {
+    margin: 0 0 4px;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  section > .src {
+    margin: 0 0 16px;
+    font: 400 11px/1.5 ui-monospace, Consolas, monospace;
+    color: var(--ink-faint);
+    overflow-x: auto;
+    white-space: pre;
+  }
+  .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .stack { display: grid; gap: 10px; max-width: 360px; }
+
+  /* The consumer's own class on a host element must survive adoption. */
+  .host-btn { width: 200px; }
+  .host-btn .ms-btn { width: 100%; }
+  ul.ms-plain { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; max-width: 340px; }
+  ul.ms-plain li { padding: 10px 12px; background: #fff; border: 1px solid var(--line); border-radius: 8px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Declarative usage</h1>
+  <p>
+    No <code>mount…()</code> calls anywhere on this page. Markup declares the interaction with
+    <code>data-ms</code> attributes and the runtime does the rest. View source — the
+    only script tag is the runtime itself.
+  </p>
+</header>
+
+<main>
+
+  <section>
+    <h2>Press — attributes only</h2>
+    <p class="src">&lt;button data-ms="press" data-ms-duration="180" data-ms-easing="ease-out"&gt;Continue&lt;/button&gt;</p>
+    <div class="row">
+      <button data-ms="press" data-ms-duration="180" data-ms-easing="ease-out">Continue</button>
+      <button data-ms="press" data-ms-duration="auto" data-ms-easing="spring(1, 300, 16)" data-ms-effect="press">Springy</button>
+      <button data-ms="press" data-ms-effect="shake" data-ms-duration="360" data-ms-distance="6">Unavailable</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Consumer class survives adoption</h2>
+    <p class="src">&lt;button class="host-btn" data-ms="press"&gt;…&lt;/button&gt;  →  the class moves onto the mounted button</p>
+    <div class="row">
+      <button class="host-btn" data-ms="press" data-ms-duration="200">Full width</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Async button — real promise, not a timer</h2>
+    <p class="src">&lt;button data-ms="async-button" data-ms-action="save"&gt;Save&lt;/button&gt;</p>
+    <div class="row">
+      <button data-ms="async-button" data-ms-action="save">Save changes</button>
+      <button data-ms="async-button" data-ms-action="save-fail">Force failure</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Disclosure</h2>
+    <p class="src">&lt;div data-ms="disclosure" data-ms-title="Delivery options"&gt;&lt;/div&gt;</p>
+    <div data-ms="disclosure" data-ms-title="Delivery options" data-ms-duration="260"></div>
+  </section>
+
+  <section>
+    <h2>Switch with persistence</h2>
+    <p class="src">&lt;button data-ms="switch" data-ms-persist="auto-save"&gt;Auto-save drafts&lt;/button&gt;</p>
+    <div class="row">
+      <button data-ms="switch" data-ms-persist="auto-save">Auto-save drafts</button>
+      <span style="font-size:12px;color:var(--ink-faint)">Reload the page — the state is remembered.</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>Drag-sort from a plain list</h2>
+    <p class="src">&lt;ul data-ms="drag-sort"&gt;&lt;li&gt;…&lt;/li&gt;&lt;/ul&gt;  →  the list items are the data</p>
+    <ul class="ms-plain" data-ms="drag-sort">
+      <li>Draft</li>
+      <li>In review</li>
+      <li>Approved</li>
+      <li>Published</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Late insertion — picked up by the observer</h2>
+    <p class="src">Injected after load; no rescan call was made.</p>
+    <div class="row">
+      <button id="add-late" type="button" class="demo-add">Insert another button</button>
+    </div>
+    <div id="late-slot" style="margin-top:14px;display:grid;gap:10px;max-width:340px"></div>
+  </section>
+
+  <section>
+    <h2>Custom element — same attributes</h2>
+    <p class="src">&lt;ms-switch data-ms-duration="380" data-ms-easing="spring(1, 320, 17)"&gt;…&lt;/ms-switch&gt;</p>
+    <div class="row">
+      <ms-switch data-ms-duration="auto" data-ms-easing="spring(1, 320, 17)">Weekend mode</ms-switch>
+    </div>
+  </section>
+
+</main>
+
+<style>
+  .demo-add {
+    font: 600 12px ui-sans-serif, system-ui, sans-serif;
+    padding: 9px 14px; border-radius: 8px; cursor: pointer;
+    border: 1px solid #cec1b0; background: #fffdfa; color: #2b2622;
+  }
+  .demo-add:focus-visible { outline: 2px solid #b4552d; outline-offset: 2px; }
+</style>
+
+<script type="module">
+  // Everything this page needs. Note there is no per-component setup: the
+  // attributes in the markup are the configuration.
+  import { start, registerAction } from "./microstate-auto.js";
+  import { defineAll } from "./microstate-elements.js";
+
+  // Real requests, not timers. The component owns busy / success / error and the
+  // ARIA; the page owns the I/O. Swap these two for `fetch` and it is production.
+  registerAction("save", () => new Promise((resolve) => setTimeout(() => resolve({ ok: true }), 700)));
+  registerAction(
+    "save-fail",
+    () => new Promise((_, reject) => setTimeout(() => reject(new Error("network")), 500))
+  );
+
+  // Custom elements for the tags that use them; the rest upgrade in place.
+  defineAll();
+
+  start(document, { defaults: { reduced: "fade" } });
+
+  // Proves the observer works: this button gets no special treatment, it is
+  // simply inserted and then scanned by the runtime on the next frame.
+  document.getElementById("add-late").addEventListener("click", () => {
+    const b = document.createElement("button");
+    b.setAttribute("data-ms", "press");
+    b.setAttribute("data-ms-duration", "260");
+    b.setAttribute("data-ms-easing", "cubic-bezier(.2,.8,.2,1)");
+    b.textContent = "Inserted at " + new Date().toLocaleTimeString();
+    document.getElementById("late-slot").append(b);
+  });
+</script>
+
+</body>
+</html>
