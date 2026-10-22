@@ -4,6 +4,10 @@ A micro-interaction laboratory for the web. Seven interaction families, each wit
 
 **Everything the preview shows, the export reproduces.** Both are driven by the same motion plan, and a browser test loads each exported file and drives it for real.
 
+**[Open the lab →](https://llinok111.github.io/microstate-lab/)**
+
+<img src="docs/img/overview.webp" alt="Microstate Lab: preset gallery on the left, a live component on a measured grid in the centre, parameter controls on the right" width="100%">
+
 > Built as a re-architecture of [webkul/micron](https://github.com/webkul/micron) (2.3k ★, MIT, unmaintained since 2018). Upstream ships twelve one-shot click keyframes; this project keeps that history and replaces the substance: a state-machine motion core, parameterised easing, accessibility as a first-class concern, and a four-target exporter. See [NOTICE](NOTICE) for the precise scope of the derivative work.
 
 ---
@@ -24,6 +28,16 @@ A micro-interaction is not a decoration. Each one answers exactly one question:
 
 The lab exists to make those distinctions visible and measurable, not to collect easing curves.
 
+<img src="docs/img/families.webp" alt="Seven interaction families, one tile each: press, loading, success, error, disclosure, drag and toggle, photographed from the running demo" width="100%">
+
+*One tile per family, captured from the running page at 2x. Only the component changes between tiles — the stage around it is identical, so the comparison is fair.*
+
+### The same interaction, four states
+
+<img src="docs/img/states.webp" alt="Four frames: a disclosure collapsed, the same panel mid-expansion, a switch off, and the switch on" width="100%">
+
+*Motion is the subject, so a still is a poor test of it. Left to right: collapsed, mid-flight (the 110 ms frame, not the settled one), switch off, switch on.*
+
 ---
 
 ## Quick start
@@ -40,7 +54,11 @@ Then open `demo/index.html` — directly from the filesystem works, no server re
 | `npm test` | 74 unit tests: easing maths, motion plans, export generation, stylesheet coverage |
 | `npm run test:browser` | 67 browser tests: real pointer/keyboard interaction, a11y audit, export runtime |
 | `npm run build -- --report` | Bundle sizes and gzip deltas |
+| `npm run figures` | Regenerate the README images from the running page |
+| `npm run figures:check` | Re-verify them: dimensions, ink coverage, per-tile content |
 | `npm run pack` | Release ZIP (no `node_modules`, no git) |
+
+The figures are generated, not drawn — `scripts/figures.mjs` drives the real demo at 2x and crops to the measured content box. `figures:check` exists because the first version of that script painted a rounded-rect *over* every tile and produced six blank images that the aggregate ink statistic happily passed; the check now extracts each cell of each collage and fails if a tile has no picture in it.
 
 ---
 
@@ -86,6 +104,10 @@ Accepted forms — all four are first-class, not special cases:
 ```
 
 A spring has no closed-form inverse, so CSS cannot express it directly. The exporter samples it into `linear()` — 32 points by default — and the curve plot shows the same samples, which is why the preview and the export cannot drift apart.
+
+<img src="docs/img/controls.webp" alt="The parameter panel: duration and delay sliders with live notes, an easing select above a plotted curve, trigger, reduced-motion strategy, loop and distance/scale" width="320">
+
+*The panel for a spring preset. The note under the curve reports the damping ratio and the derived settle time, because a spring's duration is a consequence of its physics, not a knob.*
 
 ### Delay
 
@@ -141,6 +163,10 @@ Four targets, all generated from the same plan:
 **Standalone HTML** — a complete page that runs from `file://`, honours reduced motion, and handles Enter/Space.
 
 **Config JSON** — round-trips back into the lab.
+
+<img src="docs/img/export.webp" alt="The export panel: CSS, JS, standalone HTML and config JSON tabs above a dark code block, with a list of generated caveats on the right" width="100%">
+
+*The export panel, with the caveats the generator attaches to the current preset — reduced-motion strategy, spring approximation, delay warnings, and a flag on counter-examples.*
 
 `test/export-runtime.test.mjs` writes each export to a temp file, loads it in Chrome, clicks it, and asserts an animation actually ran with the expected duration — 11 assertions that the export is not just syntactically plausible.
 
@@ -212,6 +238,14 @@ Two presets exist to be wrong, and are badged as such:
 - **`toggle-delayed`** — an 80 ms delay on a toggle. Demonstrates how quickly delay destroys perceived responsiveness.
 
 They are included because a lab that only demonstrates the good path teaches nothing about the boundary.
+
+---
+
+## Works on a phone
+
+<img src="docs/img/mobile.webp" alt="The lab at 390 pixels wide: the preset gallery reorders below the stage, and the facts row stacks to one column" width="300">
+
+*At 390 px the columns reorder — stage first, controls, then the gallery — and the three-across facts row becomes a stack. Interactions are pointer/touch driven with the same reduced-motion handling.*
 
 ---
 

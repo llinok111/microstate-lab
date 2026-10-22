@@ -21,6 +21,8 @@ import path from "node:path";
 const root = process.cwd();
 const NAME = "microstate-lab";
 const skipDirs = new Set(["node_modules", ".git", "shots", "deliver", "upstream", ".github"]);
+// package-lock.json IS included: the archive is meant to be installable with
+// `npm ci`, and exclusions that break reproducibility are not worth the bytes.
 
 async function walk(dir, out = []) {
   for (const entry of await readdir(dir, { withFileTypes: true })) {

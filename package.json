@@ -22,6 +22,8 @@
     "test": "node --test --test-concurrency=1 test/easing.test.mjs test/motion.test.mjs test/export.test.mjs test/styles.test.mjs",
     "test:browser": "node --test --test-concurrency=1 test/browser.test.mjs test/a11y.test.mjs test/export-runtime.test.mjs",
     "test:all": "npm test && npm run test:browser",
+    "figures": "node scripts/figures.mjs",
+    "figures:check": "node scripts/figures.mjs --check",
     "pack": "node scripts/pack.mjs"
   },
   "keywords": [
@@ -41,6 +43,7 @@
     "url": "https://github.com/llinok111/microstate-lab"
   },
   "devDependencies": {
-    "esbuild": "^0.19.0"
+    "esbuild": "^0.19.0",
+    "sharp": "^0.35.5"
   }
 }
