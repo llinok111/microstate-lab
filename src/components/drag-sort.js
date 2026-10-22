@@ -336,7 +336,14 @@ export function mountDragSort(root, options = {}) {
   list.addEventListener("pointercancel", onPointerUp);
   list.addEventListener("keydown", onKeyDown);
 
-  const hint = h("p", { class: "ms-hint", text: "Drag a row, or focus one and press Space then ↑ / ↓." });
+  // The long-press is stated in the hint because it is not discoverable. On v0.2
+  // a touch drag only arms after a hold, so a user who expects an immediate drag
+  // concludes the list is broken — and the fix (hold still for a moment) is
+  // exactly the thing nobody tries without being told.
+  const hintText = handleOnly
+    ? "Drag the grip. Keyboard: focus a row, Space to grab, ↑ / ↓ to move."
+    : "Drag a row — on touch, press and hold (about a quarter second) first. Keyboard: Space, then ↑ / ↓.";
+  const hint = h("p", { class: "ms-hint", text: hintText });
   const stage = h("div", { class: "ms-stage" }, [list, hint]);
 
   // Build the rows once, up front: render() only reorders existing nodes.

@@ -1,6 +1,6 @@
 {
   "name": "microstate-lab",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "A micro-interaction laboratory: state-driven feedback components with tunable duration, easing, delay and trigger, plus live preview and standalone code export.",
   "type": "module",
   "main": "dist/microstate.cjs",

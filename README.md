@@ -103,6 +103,10 @@ v0.1 answered "what should this interaction feel like". v0.2 answers "how does t
 | Export | One preset per file | `exportBundle()` + a CLI (`bundle config.json`) |
 | Sharing a config | Copy JSON | Deep link: the URL *is* the config |
 
+<img src="docs/img/share.webp" alt="The stage header with a copy-config, share-link and remount button, and the generated URL shown underneath" width="100%">
+
+*"Share link" writes the current parameters into the URL, so a tuned interaction can be pasted into a message or a bug report. Only values that differ from the preset default are serialised — `?p=toggle-spring` is a complete state.*
+
 ---
 
 ## Using the components
@@ -152,6 +156,10 @@ A spring has no closed-form inverse, so CSS cannot express it directly. The expo
 
 *The panel for a spring preset. The note under the curve reports the damping ratio and the derived settle time, because a spring's duration is a consequence of its physics, not a knob.*
 
+<img src="docs/img/spring-duration.webp" alt="The duration control with an auto checkbox ticked, showing 504ms and a note that the spring settles in 504ms" width="460">
+
+*The `auto` checkbox is the honest form of the duration slider for a spring. Ticking it takes the settle time; dragging the slider clears it and pins a value, which the notes then describe as a rescaling.*
+
 ### Delay
 
 `0`–`2000 ms`, with one hard rule enforced by the notes panel: **delay on feedback reads as breakage**. A 120 ms delay between your click and the button responding is not polish, it is a bug the user experiences as "the app is slow". Delay belongs on entrances and toasts.
@@ -174,6 +182,10 @@ The library exposes four strategies because "just make it faster" is the wrong a
 | `fade` | Spatial movement dropped, 90 ms opacity remains | Reveal/collapse — something must signal the change |
 | `off` | Nothing animates | Decorative flourishes that carry no state |
 | `ignore` | Animates normally | Lab inspection only; documented, never silent |
+
+<img src="docs/img/reduced-strategy.webp" alt="The reduced-motion strategy select showing instant, with explanatory note text below it" width="460">
+
+*Each strategy emits different CSS, not a renamed duration. `instant` keeps the state change and removes the transition; `fade` keeps 90 ms of opacity because some interactions need a signal that something arrived.*
 
 Two enforcement points:
 
@@ -204,6 +216,10 @@ Four targets, all generated from the same plan:
 **JS (WAAPI)** — for effects that need runtime values (measured height, drag distance, spring settle time). Applies the end state on cancel, so an interrupted interaction never leaves the element mid-scale.
 
 **Standalone HTML** — a complete page that runs from `file://`, honours reduced motion, and handles Enter/Space.
+
+<img src="docs/img/async-loading.webp" alt="A submit button in its loading state, with aria-busy and a spinner" width="460">
+
+*The async button mid-request. The state machine is identical whether the request is a real promise (`registerAction`) or the built-in simulation — only the label under test changes.*
 
 **Config JSON** — round-trips back into the lab.
 

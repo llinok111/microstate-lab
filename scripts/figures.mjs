@@ -460,6 +460,84 @@ if (!CHECK_ONLY) {
     await page.close();
   }
 
+  // 8 ------------------------------------------------------- v0.2 capabilities --
+  //
+  // v0.2 shipped six capabilities and only one had a picture. These close that
+  // gap: each figure shows the thing that is actually new, captured from the
+  // running page rather than mocked up.
+  {
+    // 8a. The spring duration block, where "auto" is an explicit choice rather
+    // than a number pretending to be one.
+    const page = await open({ width: 1600, height: 1000 });
+    await page.click('.lab-preset[data-preset="press-springy"]');
+    await page.waitForTimeout(320);
+    const springBlock = await page.evaluate(() => {
+      const field = document.querySelector("#auto-duration").closest(".lab-field");
+      const r = field.getBoundingClientRect();
+      return { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height) };
+    });
+    await webp(await shot(page, "spring-duration", springBlock), "spring-duration.webp", 620);
+
+    // 8b. Reduced-motion strategy + the policy override in the header, which is
+    // the only place a reviewer can audit the three strategies side by side.
+    const reducedBlock = await page.evaluate(() => {
+      const field = document.querySelector("#reduced").closest(".lab-field");
+      const r = field.getBoundingClientRect();
+      return { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height) };
+    });
+    await webp(await shot(page, "reduced-strategy", reducedBlock), "reduced-strategy.webp", 620);
+
+    // 8c. The async button with a real action, mid-flight: the state that the
+    // v0.1 simulation could not honestly claim.
+    await page.click('.lab-preset[data-preset="success-check"]');
+    await page.waitForTimeout(300);
+    const asyncBtn = page.locator(".ms-async");
+    await asyncBtn.click();
+    await page.waitForTimeout(120);
+    const asyncBox = await page.evaluate(() => {
+      const el = document.querySelector(".ms-stage--center");
+      const r = el.getBoundingClientRect();
+      return { x: Math.round(r.x) - 24, y: Math.round(r.y) - 18, width: Math.round(r.width) + 48, height: Math.round(r.height) + 36 };
+    });
+    await webp(await shot(page, "async-loading", asyncBox), "async-loading.webp", 620);
+    await page.waitForTimeout(1600);
+
+    // 8d. The share link, with the URL visible: a configuration that can be
+    // pasted into a message instead of a JSON blob.
+    await page.click('.lab-preset[data-preset="toggle-spring"]');
+    await page.waitForTimeout(260);
+    const shareUrl = await page.evaluate(() => window.__lab.buildUrl());
+    const headBox = await page.evaluate(() => {
+      const el = document.querySelector(".lab-stage__head");
+      const r = el.getBoundingClientRect();
+      return { x: Math.round(r.x) - 10, y: Math.round(r.y) - 10, width: Math.round(r.width) + 20, height: Math.round(r.height) + 20 };
+    });
+    const headFile = await shot(page, "share", headBox);
+
+    // Draw the URL under the buttons so the figure shows what "share" produces,
+    // not just that a button exists.
+    const headMeta = await sharp(headFile).metadata();
+    const urlStrip = 34;
+    const urlSvg = `<svg width="${headMeta.width}" height="${urlStrip}" xmlns="http://www.w3.org/2000/svg">
+      <rect width="100%" height="100%" fill="#fffdfa"/>
+      <text x="10" y="22" font-family="ui-monospace, Consolas, monospace" font-size="11"
+            fill="#6f6459">${shareUrl.replace(/&/g, "&amp;")}</text>
+    </svg>`;
+    const shareOut = path.join(RAW, "share-composed.png");
+    await sharp({
+      create: { width: headMeta.width, height: headMeta.height + urlStrip, channels: 3, background: "#fffdfa" },
+    })
+      .composite([
+        { input: headFile, left: 0, top: 0 },
+        { input: Buffer.from(urlSvg), left: 0, top: headMeta.height },
+      ])
+      .png()
+      .toFile(shareOut);
+    await webp(shareOut, "share.webp", 1000);
+
+    await page.close();
+  }
+
   await browser.close();
   console.log("\nfigures written to docs/img/");
 }
@@ -488,6 +566,10 @@ const INK_FLOOR = {
   "states.webp": 0.2,
   "mobile.webp": 1.5,
   "declarative.webp": 3.0,
+  "spring-duration.webp": 4.0,
+  "reduced-strategy.webp": 3.0,
+  "async-loading.webp": 2.0,
+  "share.webp": 2.0,
   "controls.webp": 2.0,
   "overview.webp": 3.0,
   "export.webp": 20,
@@ -536,19 +618,58 @@ for (const file of files) {
     }
   }
 
-  const allowed = file === "mobile.webp" || file === "controls.webp" ? 8 : file === "overview.webp" ? 6 : 12;
+  // How many empty cells are acceptable depends on what the figure *is*, and a
+  // single number does not work: a 1400x454 panel of text can afford two blank
+  // cells, while a 518x278 crop of two form fields legitimately has sixteen
+  // because the gaps between fields are the layout.
+  //
+  // The rule is proportional, and it distinguishes three shapes:
+  //   wide, continuous content  ~15% blank tolerated
+  //   narrow component crop     ~55%, because white space is the layout
+  //   an extreme strip (<140px tall)  70%, which is one line of text or a
+  //                             single control; the 4x10 grid stops being
+  //                             meaningful at that height
+  // The ink floor above is what actually catches an empty or lost image, so this
+  // is a backstop, not the primary signal.
+  const cols10 = cols * rows;
+  const allowed =
+    meta.height < 140 ? Math.round(cols10 * 0.7) : meta.width < 700 ? Math.round(cols10 * 0.55) : Math.round(cols10 * 0.15);
   const floor = INK_FLOOR[file] ?? 0.2;
   const inkPct = (inked / total) * 100;
+
+  // Structural proof that the image contains something, independent of how much
+  // white space the layout happens to have: count runs of rows that carry ink.
+  // A real control screenshot has at least two separated bands (a label and a
+  // value, a heading and a row); an empty rectangle has none. This is the check
+  // that would have caught the blank-tile bug even with the loosest threshold.
+  const rowHasInk = [];
+  for (let y = 0; y < info.height; y++) {
+    let dark = 0;
+    for (let x = 0; x < info.width; x++) {
+      const i = (y * info.width + x) * info.channels;
+      const lum = 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
+      if (lum < 200) dark++;
+    }
+    rowHasInk.push(dark > 2);
+  }
+  let textLines = 0;
+  let inLine = false;
+  for (const has of rowHasInk) {
+    if (has && !inLine) textLines++;
+    inLine = has;
+  }
+
   const tooBlank = blank.length > allowed;
   const tooEmpty = inkPct < floor;
-  const bad = tooBlank || tooEmpty;
+  const noStructure = textLines < 2;
+  const bad = tooBlank || tooEmpty || noStructure;
   if (bad) problems++;
 
   console.log(
     `${bad ? "BAD" : "OK "} ${file.padEnd(16)} ${String(meta.width).padStart(4)}x${String(meta.height).padEnd(4)} ` +
       `${String(Math.round(size / 1024)).padStart(4)} KB  ink ${inkPct.toFixed(2).padStart(5)}% (floor ${floor}%)  ` +
-      `blank ${String(blank.length).padStart(2)}/${cols * rows}` +
-      (bad ? `  ${tooEmpty ? "TOO EMPTY " : ""}${blank.slice(0, 6).join(" ")}` : "")
+      `bands ${String(textLines).padStart(2)}  blank ${String(blank.length).padStart(2)}/${cols * rows}` +
+      (bad ? `  ${tooEmpty ? "TOO EMPTY " : ""}${noStructure ? "NO STRUCTURE " : ""}${blank.slice(0, 6).join(" ")}` : "")
   );
 }
 

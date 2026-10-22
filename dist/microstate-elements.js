@@ -1496,7 +1496,8 @@ function mountDragSort(root, options = {}) {
   list.addEventListener("pointerup", onPointerUp);
   list.addEventListener("pointercancel", onPointerUp);
   list.addEventListener("keydown", onKeyDown);
-  const hint = h("p", { class: "ms-hint", text: "Drag a row, or focus one and press Space then \u2191 / \u2193." });
+  const hintText = handleOnly ? "Drag the grip. Keyboard: focus a row, Space to grab, \u2191 / \u2193 to move." : "Drag a row \u2014 on touch, press and hold (about a quarter second) first. Keyboard: Space, then \u2191 / \u2193.";
+  const hint = h("p", { class: "ms-hint", text: hintText });
   const stage = h("div", { class: "ms-stage" }, [list, hint]);
   for (const label of items)
     rows.set(label, makeRow(label));
