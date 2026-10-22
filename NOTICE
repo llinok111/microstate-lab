@@ -31,7 +31,7 @@ No upstream code is executed by the library. Nothing in `src/` is derived from u
 | Accessibility | `aria-*` count: 0 | Roles, live regions, focus management, keyboard parity, tested |
 | Component state | None — the DOM is the state | Explicit state machines with `getState()` |
 | Export | None | CSS / WAAPI JS / standalone HTML / config JSON |
-| Tests | `npm test` → `exit 1` ("no test specified") | 139 tests across 7 suites |
+| Tests | `npm test` → `exit 1` ("no test specified") | 141 tests across 7 suites |
 
 The `upstream/` directory is included as a licence and provenance artefact. It is not part of the build and is excluded from the release ZIP.
 

@@ -62,6 +62,26 @@ test("boots with no console errors", () => {
   assert.deepEqual(errors, []);
 });
 
+test("the page requests no external resources", async () => {
+  // The lab must run from file:// and from a Pages sub-path. An absolute or
+  // protocol-relative reference would work locally and break in one of them.
+  const external = await page.evaluate(() =>
+    [...document.querySelectorAll("link[href], script[src], img[src]")]
+      .map((el) => el.getAttribute("href") || el.getAttribute("src"))
+      .filter((url) => /^(https?:)?\/\//.test(url))
+  );
+  assert.deepEqual(external, []);
+});
+
+test("a favicon is declared, so the site does not 404 on /favicon.ico", async () => {
+  const href = await page.evaluate(
+    () => document.querySelector('link[rel~="icon"]')?.getAttribute("href") ?? null
+  );
+  assert.ok(href, "no icon link");
+  const status = await page.evaluate(async (url) => (await fetch(url)).status, href);
+  assert.equal(status, 200, `${href} returned ${status}`);
+});
+
 test("gallery lists every preset from the registry", async () => {
   const painted = await page.locator(".lab-preset").count();
   const registry = await page.evaluate(async () => {

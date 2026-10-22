@@ -38,7 +38,7 @@ Then open `demo/index.html` — directly from the filesystem works, no server re
 | Command | What it runs |
 |---|---|
 | `npm test` | 74 unit tests: easing maths, motion plans, export generation, stylesheet coverage |
-| `npm run test:browser` | 65 browser tests: real pointer/keyboard interaction, a11y audit, export runtime |
+| `npm run test:browser` | 67 browser tests: real pointer/keyboard interaction, a11y audit, export runtime |
 | `npm run build -- --report` | Bundle sizes and gzip deltas |
 | `npm run pack` | Release ZIP (no `node_modules`, no git) |
 
@@ -174,7 +174,7 @@ src/
     feedback.js   inline error field + toast
   styles/microstate.css   9 KB, ships to consumers
 demo/                     the lab (lab.css is workbench chrome, not shipped)
-test/                     139 tests across 7 suites
+test/                     141 tests across 7 suites
 ```
 
 ### Three decisions worth knowing
@@ -223,7 +223,7 @@ They are included because a lab that only demonstrates the good path teaches not
 | `motion.test.mjs` | 24 | Reduced-motion strategies, clamping honesty, keyframe validity |
 | `export.test.mjs` | 26 | Generated CSS parses and matches the plan, all targets well-formed |
 | `styles.test.mjs` | 3 | No class used without a rule, no dead rules, balanced braces |
-| `browser.test.mjs` | 37 | Real pointer/keyboard interaction, async state machine, drag, export panel |
+| `browser.test.mjs` | 39 | Real pointer/keyboard interaction, async state machine, drag, export panel |
 | `a11y.test.mjs` | 17 | Real OS reduce, ARIA tree, focus rings via keyboard, contrast |
 | `export-runtime.test.mjs` | 11 | Exported HTML loads in Chrome and animates when clicked |
 
