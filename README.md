@@ -1,174 +1,240 @@
-[![Micron.JS](https://webkul.com/blog/wp-content/uploads/2018/01/micron-logo.png)](https://webkul.github.io/micron)
+# microstate-lab
 
-### Check [Interactive Doc](https://webkul.github.io/micron/docs.html) on Website.
+A micro-interaction laboratory for the web. Seven interaction families, each with tunable duration, easing, delay and trigger — previewed live against real components, then exported as standalone code.
+
+**Everything the preview shows, the export reproduces.** Both are driven by the same motion plan, and a browser test loads each exported file and drives it for real.
+
+> Built as a re-architecture of [webkul/micron](https://github.com/webkul/micron) (2.3k ★, MIT, unmaintained since 2018). Upstream ships twelve one-shot click keyframes; this project keeps that history and replaces the substance: a state-machine motion core, parameterised easing, accessibility as a first-class concern, and a four-target exporter. See [NOTICE](NOTICE) for the precise scope of the derivative work.
+
 ---
 
-# Introduction
-Micron.JS is a micro interaction library which can be used to add Interactions to different DOM Elements. Micron.JS animates an element using CSS power and the interactive behaviours are controlled by JavaScript.
+## Why a second look at micro-interactions
 
-Micron.JS is easy to adapt and can bring interactions to life using html5 data attributes or a chain of JavaScript methods.
+A micro-interaction is not a decoration. Each one answers exactly one question:
 
-# Getting Started
-To get started with Micron.JS, you need to include both `micron.min.css` * (which have all ready to use interaction animations) and `micron.min.js`
-If you don't need all the available interactions, you can simply include the respective `*.min.css` file only.
+| Family | Question it answers | Fails when |
+|---|---|---|
+| **Press** | Did my input land? | Feedback arrives on release instead of press |
+| **Loading** | Is the system working? | It blocks input, or shows a spinner where progress is known |
+| **Submit success** | Did the operation complete? | The confirmation is only a colour change |
+| **Error feedback** | What went wrong? | It is a red shake with no message, or no focus move |
+| **Expand / collapse** | What is inside this container? | The panel is `display:none`d before it can animate out |
+| **Drag** | Where can this go? | It has no keyboard equivalent (WCAG 2.5.7) |
+| **State toggle** | Which state am I in? | It is a styled `div` with no `role` and no `aria-checked` |
 
-# Installation
-Compiled CSS and JavaScript minified files can be directly linked from [UNPKG](https://unpkg.com/#/) CDN or Micron.JS can be included within your workflow using your favorite package managers as well.
+The lab exists to make those distinctions visible and measurable, not to collect easing curves.
 
-## Link from UNPKG CDN
-Include both the Micron CSS and JavaScript files in the header section of your document.
+---
 
-```html
-<link href="https://unpkg.com/webkul-micron@1.1.6/dist/css/micron.min.css" type="text/css" rel="stylesheet">
-<script src="https://unpkg.com/webkul-micron@1.1.6/dist/script/micron.min.js" type="text/javascript"></script>
+## Quick start
+
+```bash
+npm install
+npm run build          # dist/ + mirrored bundles into demo/
 ```
 
-## Package Managers
-You can use either npm or bower to get the Micron.JS package.
+Then open `demo/index.html` — directly from the filesystem works, no server required.
 
-Copy and Paste the command below in your terminal to get package with npm -
-```cli
-npm install webkul-micron
+| Command | What it runs |
+|---|---|
+| `npm test` | 74 unit tests: easing maths, motion plans, export generation, stylesheet coverage |
+| `npm run test:browser` | 65 browser tests: real pointer/keyboard interaction, a11y audit, export runtime |
+| `npm run build -- --report` | Bundle sizes and gzip deltas |
+| `npm run pack` | Release ZIP (no `node_modules`, no git) |
+
+---
+
+## Using the components
+
+The library is framework-free: each component is a function that builds DOM and returns a handle.
+
+```js
+import { mountPress, mountDisclosure } from "./dist/microstate.js";
+import "./dist/microstate.css";
+
+const press = mountPress(document.querySelector("#slot"), {
+  label: "Continue",
+  motion: { duration: 180, easing: "ease-out", reduced: "instant", trigger: "press" },
+});
+
+// Later: change the motion without remounting.
+press.setMotion({ duration: 420, easing: "spring(1, 300, 16)" });
+
+press.getState();   // { count, pressed, plan }
+press.destroy();    // removes nodes and listeners
 ```
 
-Load the package with the code below:
-```javascript
-const micron = require('webkul-micron');
+Every component exposes the same surface: `setMotion(spec)`, `getState()`, `destroy()`.
+
+---
+
+## The four knobs
+
+### Duration
+
+`0`–`4000 ms`. Below ~100 ms the transition is imperceptible; above ~400 ms a *feedback* interaction reads as lag rather than polish. The lab states this per value instead of leaving you to guess.
+
+### Easing
+
+Accepted forms — all four are first-class, not special cases:
+
+```js
+"ease-out"                        // CSS keyword, exported verbatim
+"cubic-bezier(.2, .8, .2, 1)"     // solved per frame, Newton + bisection fallback
+"spring(1, 300, 16)"              // mass, stiffness, damping
+"steps(4)"  "steps(6, start)"     // quantised progress
 ```
 
-Copy and Paste the command below in your terminal to get package with bower -
-```cli
-bower install webkul-micron
-```
+A spring has no closed-form inverse, so CSS cannot express it directly. The exporter samples it into `linear()` — 32 points by default — and the curve plot shows the same samples, which is why the preview and the export cannot drift apart.
 
-# Usage
-Micron JS is very easy and quick to use.
+### Delay
 
-## Adding an Interaction
-Add the `data-micron="interaction"` attribute to the respective element and Voila! you are already there.
+`0`–`2000 ms`, with one hard rule enforced by the notes panel: **delay on feedback reads as breakage**. A 120 ms delay between your click and the button responding is not polish, it is a bug the user experiences as "the app is slow". Delay belongs on entrances and toasts.
 
-**Example Code**
+### Trigger
 
-```html
-<a href="#!" class="button" data-micron="bounce">Label</a>
-```
+`press` · `click` · `hover` · `focus` · `enter` · `manual`.
 
-## Controlling Duration
-Micron Interactions defaults to ".45" seconds. Add the data-micron-duration="number" attribute to control the duration of the defined interaction.
+`press` is the one that matters and the one CSS cannot express. A class toggle has no "held" state, so the exporter says so in a comment rather than silently generating something that does not work.
 
-**Example Code**
+---
 
-```html
-<a href="#!" class="button" data-micron="bounce" data-micron-duration=".95">Label</a>
-```
+## Reduced motion is a decision, not a speed
 
-## Controlling Timing or Ease
-Micron Interactions defaults to "ease-in-out". Add the data-micron-timing="@type" attribute to control the easing of the defined interaction.
+The library exposes four strategies because "just make it faster" is the wrong answer for half the cases:
 
-For now, `@type` only supports the easings mentioned below-
+| Strategy | What happens | Correct for |
+|---|---|---|
+| `instant` | State changes immediately, transition removed | Press, toggle — the state is already legible |
+| `fade` | Spatial movement dropped, 90 ms opacity remains | Reveal/collapse — something must signal the change |
+| `off` | Nothing animates | Decorative flourishes that carry no state |
+| `ignore` | Animates normally | Lab inspection only; documented, never silent |
 
-`linear`
+Two enforcement points:
 
-`ease-in`
+1. **CSS**: each exported stylesheet carries a real `@media (prefers-reduced-motion: reduce)` block matching the chosen strategy.
+2. **JS**: `plan()` resolves the strategy at play time, and a zero-duration plan *applies the end state synchronously* — so a reduced-motion user sees the same correct state, just without the transition.
 
-`ease-out`
+`test/a11y.test.mjs` drives this with `page.emulateMedia({ reducedMotion: "reduce" })`, which changes the actual media query the page sees, so both paths are exercised rather than a mock flag.
 
-`ease-in-out`
+---
 
-**Example Code**
+## Export
 
-```html
-<a href="#!" class="button" data-micron="bounce" data-micron-timing="ease-in">Label</a>
-```
+Four targets, all generated from the same plan:
 
-## Bind Interaction
-Add `data-micron-bind="true"` & `data-micron-id="name"` to the defined triggering element, and interaction will be applied to the element which reference to the defined id attribute.
-
-**Example Code**
-
-```html
-<a href="#!" class="button" data-micron="bounce" data-micron-bind="true" data-micron-id="me">Label</a>
-<a href="#!" class="button" id="me">Binded</a>
-```
-
-# Access inside JavaScript
-Call micron chained methods to apply interactions to any DOM Element, right in your custom block of JavaScript Code.
-
-```javascript
-micron.getEle("").interaction("").duration("").timing("");
-```
-Pass an argument with `selector name` which can either be id or a class to `getEle()` method.
-
-Pass an argument with `interaction name` to `interaction()` method.
-
-Pass an argument which is a `number` to `duration()` method.
-
-Pass an argument with `type of ease` to `timing()` method.
-
-**Example Code**
-
-```javascript
-function myFunc(){
-    micron.getEle("#me").interaction("bounce").duration(".45").timing("ease-out");
- }
-
-//Call Interaction
-myFunc();
-```
-
-# Interactions
-Currently, Micron.JS supports the interactions mentioned below, head back to the [homepage](https://webkul.github.io/micron) to see all interactions in the real action.
-
-`data-micron="shake"`
-
-`data-micron="fade"`
-
-`data-micron="jelly"`
-
-`data-micron="bounce"`
-
-`data-micron="tada"`
-
-`data-micron="groove"`
-
-`data-micron="swing"`
-
-`data-micron="squeeze"`
-
-`data-micron="flicker"`
-
-`data-micron="jerk"`
-
-`data-micron="blink"`
-
-`data-micron="pop"`
-
-# Customization
-You can even add your very own css interaction to Micron.JS.
-
-First include the code mentioned below in your css file.
+**CSS** — a standalone stylesheet plus the class to add. No JS, no runtime, 3 KB typical.
 
 ```css
-.mjs-linear{animation-timing-function:cubic-bezier(0,0,1,1)}.mjs-ease-in{animation-timing-function:cubic-bezier(.4,0,1,1)}.mjs-ease-out{animation-timing-function:cubic-bezier(0,0,.2,1)}.mjs-ease-in-out{animation-timing-function:cubic-bezier(.4,0,.2,1)}
+@keyframes ms-press-soft-anim {
+  0%   { transform: scale(1); }
+  35%  { transform: scale(0.97); }
+  100% { transform: scale(1); }
+}
+
+.ms-press-soft { animation-duration: 180ms; /* … */ }
+@media (prefers-reduced-motion: reduce) { /* … */ }
 ```
 
-Create a class with `.mjs-` prefix. Call the keyframe css animation inside it. Use the interaction with your `class name` without `.mjs-` prefix.
+**JS (WAAPI)** — for effects that need runtime values (measured height, drag distance, spring settle time). Applies the end state on cancel, so an interrupted interaction never leaves the element mid-scale.
 
-**Example Code**
+**Standalone HTML** — a complete page that runs from `file://`, honours reduced motion, and handles Enter/Space.
 
-```css
- /*Define a Class*/
- .mjs-custom{
-    animation: custom-action;
- }
+**Config JSON** — round-trips back into the lab.
 
- @keyframes custom-action{
-    from { . . . }
-    to { . . . }
- }
+`test/export-runtime.test.mjs` writes each export to a temp file, loads it in Chrome, clicks it, and asserts an animation actually ran with the expected duration — 11 assertions that the export is not just syntactically plausible.
+
+### Export limits, stated honestly
+
+- **Only `transform` and `opacity` are animated.** Both stay on the compositor; animating layout properties is the single most common cause of janky micro-interactions, so the exporter refuses to emit them.
+- **`linear()` support** is probed with `CSS.supports`. Without it, a spring degrades to a `cubic-bezier` approximation and the output says so.
+- **`will-change` is scoped.** Set while running, cleared at rest — a permanent `will-change` pins a compositor layer per element.
+- **Press-in-CSS is incomplete by construction.** The export includes the four-line JS and a comment explaining why.
+
+---
+
+## Architecture
+
+```
+src/
+  core/
+    easing.js     curve maths: bezier solver, springs, steps, linear() serialisation
+    motion.js     plan() / play(): clamping, reduced-motion resolution, end-state guarantee
+    presets.js    21 presets across 7 families, as data
+    export.js     CSS / JS / HTML / JSON generation from the same plan
+  components/
+    base.js       element factory, shared live region, motion holder
+    press.js      press feedback, pointer + keyboard parity
+    async-button.js  idle → loading → success | error → idle
+    loading.js    spinner, staggered dots, determinate bar
+    submit-success.js form → confirmation, focus management
+    disclosure.js measured-height expand/collapse
+    switch.js     role="switch" state toggle
+    drag-sort.js  pointer drag + keyboard grab/move/drop
+    feedback.js   inline error field + toast
+  styles/microstate.css   9 KB, ships to consumers
+demo/                     the lab (lab.css is workbench chrome, not shipped)
+test/                     139 tests across 7 suites
 ```
 
-Now use interaction with `data-micron="custom"`
+### Three decisions worth knowing
 
-# Credits
-&copy; Copyright 2018 [Webkul Software](https://webkul.com), All rights reserved.
+**One easing evaluator, three consumers.** The curve plot, the preview and the exporter all call the same function. Two implementations would eventually disagree, and the disagreement would be invisible until a designer compared two screenshots.
+
+**`plan()` is data, `play()` is the only side effect.** Everything that decides *what* will happen is pure and testable without a DOM; 24 unit tests cover the plan logic with no browser. `play()` is then a thin, auditable wrapper with one guarantee: the end state is always applied.
+
+**The end-state guarantee is the whole point.** `animation.cancel()` removes `fill: both`, which leaves the element at whatever frame it had reached. A button stuck at `scale(0.97)` after a double-click is the canonical micro-interaction bug; `play()` writes the final keyframe on cancel, and a browser test clicks five times rapidly and asserts the computed transform is identity.
+
+---
+
+## Accessibility
+
+These are tested, not aspirational:
+
+- Every control has an accessible name (`aria-label` or a `<label for>`); asserted by scanning the live DOM.
+- Everything is reachable and operable by keyboard; a test tabs through 70 stops and asserts each one shows a visible focus ring, arriving via the keyboard so `:focus-visible` actually matches.
+- The shared live region is polite for success and assertive for errors, and clears itself so a repeated message is re-announced.
+- Errors set `aria-invalid`, link the message with `aria-describedby`, and move focus to the field.
+- The disclosure hides the panel only *after* the exit animation, so content does not vanish before it can be seen leaving.
+- Drag has a full keyboard path (`Space` grab → `↓` move → `Space` drop, `Escape` cancel) with live-region announcements, and focus stays on the moved item so moves can be chained.
+- Body text meets 4.5:1 contrast — this caught a real failure: the muted grey measured 2.8:1 and was darkened to `#6f6459` (5.68:1).
+- A high-contrast mode doubles every border to 2px.
+
+`docs/LIMITS.md` records what is *not* solved, including the one known limitation: animating `height` for the disclosure triggers layout on every frame, which is acceptable for a panel that opens a few times per session and unacceptable for anything animated continuously.
+
+---
+
+## Counter-examples
+
+Two presets exist to be wrong, and are badged as such:
+
+- **`error-slow-shake`** — a 600 ms shake with a 120 ms delay. Slow enough to feel punitive, delayed enough to look broken.
+- **`toggle-delayed`** — an 80 ms delay on a toggle. Demonstrates how quickly delay destroys perceived responsiveness.
+
+They are included because a lab that only demonstrates the good path teaches nothing about the boundary.
+
+---
+
+## Test coverage
+
+| Suite | Tests | What it proves |
+|---|---|---|
+| `easing.test.mjs` | 21 | Bezier solving is accurate, springs settle correctly, `linear()` shape |
+| `motion.test.mjs` | 24 | Reduced-motion strategies, clamping honesty, keyframe validity |
+| `export.test.mjs` | 26 | Generated CSS parses and matches the plan, all targets well-formed |
+| `styles.test.mjs` | 3 | No class used without a rule, no dead rules, balanced braces |
+| `browser.test.mjs` | 37 | Real pointer/keyboard interaction, async state machine, drag, export panel |
+| `a11y.test.mjs` | 17 | Real OS reduce, ARIA tree, focus rings via keyboard, contrast |
+| `export-runtime.test.mjs` | 11 | Exported HTML loads in Chrome and animates when clicked |
+
+---
+
+## Credits
+
+- Upstream: [webkul/micron](https://github.com/webkul/micron) — MIT, © 2018 Webkul. Commit history preserved.
+- Easing vocabulary and naming informed by [easings.net](https://easings.net) (Andrey Sitnik, Ivan Solovev).
+- Spring physics follow the standard damped harmonic oscillator; see `docs/DESIGN.md`.
+
+## License
+
+MIT. See [LICENSE](LICENSE) and [NOTICE](NOTICE).

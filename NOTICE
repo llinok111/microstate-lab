@@ -1,0 +1,49 @@
+# NOTICE
+
+## Upstream
+
+This project is a derivative work of:
+
+- **webkul/micron** — https://github.com/webkul/micron
+- Copyright © 2018 Webkul
+- Licensed under the MIT License (see `upstream/micron/LICENSE` for the original text)
+- Last upstream commit: `c46d1bd` "Version Patch - v1.1.6" (2018-10-04)
+
+The upstream git history is preserved in the `master` branch of this repository. Upstream source files are archived under `upstream/micron/` unmodified, for reference.
+
+### What was retained from upstream
+
+- The MIT license terms.
+- The premise: a small, dependency-free set of CSS-driven interaction effects.
+- The naming pattern for individual effects (bounce, pop, shake, swing…) informed the effect names used here.
+
+### What was replaced
+
+No upstream code is executed by the library. Nothing in `src/` is derived from upstream source. The upstream implementation was a single 180-line click handler that swapped a class on the element; this project replaces it wholesale:
+
+| Concern | Upstream (micron v1.1.6) | This project |
+|---|---|---|
+| Trigger model | `click` only, delegated on `window` | Six trigger modes, bound per component |
+| Interruption | None — animations stack or are lost | Explicit `latest` / `queue` / `lock` policy |
+| Parameterisation | `data-micron-duration` (number only) | Duration, delay, easing (4 kinds), distance, scale, iterations |
+| Easing | Four keywords | Cubic bezier solver, damped springs, steps, `linear()` serialisation |
+| Reduced motion | Not handled at all (`grep -ri "prefers-reduced-motion"` → 0 hits) | Four strategies, enforced in CSS and JS, tested against a real OS media query |
+| Accessibility | `aria-*` count: 0 | Roles, live regions, focus management, keyboard parity, tested |
+| Component state | None — the DOM is the state | Explicit state machines with `getState()` |
+| Export | None | CSS / WAAPI JS / standalone HTML / config JSON |
+| Tests | `npm test` → `exit 1` ("no test specified") | 139 tests across 7 suites |
+
+The `upstream/` directory is included as a licence and provenance artefact. It is not part of the build and is excluded from the release ZIP.
+
+## Third-party references
+
+- **easings.net** (Andrey Sitnik, Ivan Solovev) — the naming and canonical control points for the `cubic-bezier` presets in the demo's easing menu (Material standard, Material decelerate, Back out) follow the conventions popularised there. No code copied.
+- **Damped harmonic oscillator** — the spring easing in `src/core/easing.js` is a direct implementation of the standard closed-form solution for a damped mass-spring system, which is textbook physics rather than borrowed code.
+
+## Fonts and assets
+
+No web fonts, icon fonts, or external assets are loaded. The check mark is drawn with CSS borders; the drag handle is a CSS `radial-gradient`. This is deliberate: the exported standalone HTML must run from `file://` with no network access, and the test suite asserts that no `href` or `src` points at an absolute URL.
+
+## If you are the rights holder
+
+If anything here misattributes or oversteps the upstream licence, open an issue and it will be corrected. The intent is to credit the original clearly and to make the scope of the derivative work auditable — which is why the comparison table above is specific rather than a vague "inspired by".

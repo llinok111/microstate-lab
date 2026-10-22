@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Microstate Lab — 微交互实验室</title>
+<meta name="description" content="按钮按压、加载、提交成功、错误反馈、展开收起、拖拽与状态切换的微交互实验室。可调持续时间、缓动曲线、延迟与触发方式，支持实时预览与独立代码导出。">
+<link rel="stylesheet" href="./microstate.css">
+<link rel="stylesheet" href="./lab.css">
+</head>
+<body>
+
+<header class="lab-top">
+  <div class="lab-brand">
+    <span class="lab-mark" aria-hidden="true"></span>
+    <div>
+      <h1>Microstate Lab</h1>
+      <p>微交互实验室 · 参数化 · 可访问 · 可导出</p>
+    </div>
+  </div>
+
+  <div class="lab-top__right">
+    <div class="lab-env" role="group" aria-label="Reduced motion simulation">
+      <span class="lab-env__label">减少动态效果</span>
+      <select id="policy" aria-label="减少动态效果策略">
+        <option value="respect">跟随系统</option>
+        <option value="ignore">忽略系统（评审用）</option>
+        <option value="force">模拟「减少动态」</option>
+      </select>
+      <output id="env-os" class="lab-chip" title="OS preference">os: —</output>
+    </div>
+    <button id="theme" class="lab-ghost" type="button" aria-pressed="false">对比度</button>
+  </div>
+</header>
+
+<main class="lab-grid">
+
+  <!-- ============================================================ gallery -->
+  <nav class="lab-col lab-col--gallery" aria-label="交互预设">
+    <div class="lab-col__head">
+      <h2>交互族</h2>
+      <p id="family-question">七类状态，七种问题。</p>
+    </div>
+    <div id="gallery" class="lab-gallery"></div>
+  </nav>
+
+  <!-- ============================================================== stage -->
+  <section class="lab-col lab-col--stage" aria-label="预览">
+    <div class="lab-stage__head">
+      <div>
+        <h2 id="preset-title">Soft press</h2>
+        <p id="preset-desc">Scale-down that returns.</p>
+      </div>
+      <div class="lab-stage__actions">
+        <button id="replay" class="lab-btn" type="button">重新挂载</button>
+        <button id="copy-config" class="lab-btn" type="button">复制配置</button>
+      </div>
+    </div>
+
+    <div id="surface" class="lab-surface" aria-live="off"></div>
+
+    <div class="lab-stage__foot">
+      <div class="lab-facts">
+        <div class="lab-fact">
+          <span class="lab-fact__k">生效</span>
+          <span class="lab-fact__v" id="fact-effective">—</span>
+        </div>
+        <div class="lab-fact">
+          <span class="lab-fact__k">计划</span>
+          <span class="lab-fact__v lab-fact__v--mono" id="fact-plan">—</span>
+        </div>
+        <div class="lab-fact">
+          <span class="lab-fact__k">降级</span>
+          <span class="lab-fact__v" id="fact-reduced">—</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ controls -->
+  <aside class="lab-col lab-col--controls" aria-label="参数">
+    <h2>参数</h2>
+
+    <div class="lab-field">
+      <label for="duration">持续时间</label>
+      <div class="lab-field__row">
+        <input id="duration" type="range" min="0" max="1200" step="10" value="180">
+        <input id="duration-num" type="number" min="0" max="4000" step="10" value="180" aria-label="持续时间毫秒">
+        <span class="lab-unit">ms</span>
+      </div>
+      <p class="lab-note" id="note-duration">低于 120ms 感知不到过渡；高于 400ms 开始拖沓。</p>
+    </div>
+
+    <div class="lab-field">
+      <label for="delay">延迟</label>
+      <div class="lab-field__row">
+        <input id="delay" type="range" min="0" max="600" step="10" value="0">
+        <input id="delay-num" type="number" min="0" max="2000" step="10" value="0" aria-label="延迟毫秒">
+        <span class="lab-unit">ms</span>
+      </div>
+      <p class="lab-note" id="note-delay">延迟作用在反馈上时，会直接读成「卡了」。</p>
+    </div>
+
+    <div class="lab-field">
+      <label for="easing">缓动曲线</label>
+      <select id="easing">
+        <optgroup label="关键词">
+          <option value="ease-out">ease-out</option>
+          <option value="ease-in-out">ease-in-out</option>
+          <option value="ease-in">ease-in</option>
+          <option value="linear">linear</option>
+        </optgroup>
+        <optgroup label="Bezier">
+          <option value="cubic-bezier(.2,.8,.2,1)">Material standard</option>
+          <option value="cubic-bezier(.4,0,.2,1)">Material decelerate</option>
+          <option value="cubic-bezier(.3,.7,.4,1)">Soft out</option>
+          <option value="cubic-bezier(.34,1.56,.64,1)">Back out</option>
+        </optgroup>
+        <optgroup label="Spring">
+          <option value="spring(1, 170, 14)">Spring · soft</option>
+          <option value="spring(1, 260, 18)">Spring · snappy</option>
+          <option value="spring(1, 320, 17)">Spring · bouncy</option>
+          <option value="spring(1, 400, 40)">Spring · overdamped</option>
+        </optgroup>
+        <optgroup label="Steps">
+          <option value="steps(4)">steps(4)</option>
+          <option value="steps(6, start)">steps(6, start)</option>
+        </optgroup>
+      </select>
+      <svg id="curve" class="lab-curve" viewBox="0 0 260 120" role="img" aria-label="缓动曲线">
+        <g class="lab-curve__grid">
+          <line x1="0" y1="60" x2="260" y2="60"></line>
+          <line x1="0" y1="20" x2="260" y2="20"></line>
+          <line x1="0" y1="100" x2="260" y2="100"></line>
+        </g>
+        <path id="curve-path" class="lab-curve__path" d=""></path>
+        <circle id="curve-dot" class="lab-curve__dot" r="3.5" cx="0" cy="0"></circle>
+      </svg>
+      <p class="lab-note" id="note-easing">—</p>
+    </div>
+
+    <div class="lab-field">
+      <label for="trigger">触发方式</label>
+      <select id="trigger">
+        <option value="press">按下即反馈（press）</option>
+        <option value="click">点击（click）</option>
+        <option value="hover">悬停（hover）</option>
+        <option value="focus">聚焦（focus）</option>
+        <option value="enter">入场（enter）</option>
+        <option value="manual">程序触发（manual）</option>
+      </select>
+    </div>
+
+    <div class="lab-field">
+      <label for="reduced">减少动态时</label>
+      <select id="reduced">
+        <option value="instant">instant — 状态立即生效</option>
+        <option value="fade">fade — 只保留 90ms 淡入</option>
+        <option value="off">off — 完全不动</option>
+        <option value="ignore">ignore — 不处理（仅评审）</option>
+      </select>
+      <p class="lab-note" id="note-reduced">—</p>
+    </div>
+
+    <div class="lab-field lab-field--inline">
+      <label for="iterations">循环</label>
+      <input id="iterations" type="checkbox">
+      <span class="lab-note">infinite</span>
+    </div>
+
+    <div class="lab-field">
+      <label for="distance">位移</label>
+      <div class="lab-field__row">
+        <input id="distance" type="range" min="0" max="32" step="1" value="6">
+        <output id="distance-out" class="lab-unit lab-unit--wide">6px</output>
+      </div>
+    </div>
+
+    <div class="lab-field">
+      <label for="scale">缩放</label>
+      <div class="lab-field__row">
+        <input id="scale" type="range" min="0.85" max="1.05" step="0.01" value="0.97">
+        <output id="scale-out" class="lab-unit lab-unit--wide">0.97</output>
+      </div>
+    </div>
+
+    <button id="reset" class="lab-btn lab-btn--wide" type="button">恢复预设默认</button>
+  </aside>
+</main>
+
+<!-- ================================================================ export -->
+<section class="lab-export" aria-label="代码导出">
+  <div class="lab-export__head">
+    <h2>代码导出</h2>
+    <div class="lab-tabs" role="tablist" aria-label="导出目标">
+      <button role="tab" id="tab-css" aria-selected="true" aria-controls="out" data-target="css" class="is-active">CSS</button>
+      <button role="tab" id="tab-js" aria-selected="false" aria-controls="out" data-target="js">JS (WAAPI)</button>
+      <button role="tab" id="tab-html" aria-selected="false" aria-controls="out" data-target="html">独立 HTML</button>
+      <button role="tab" id="tab-json" aria-selected="false" aria-controls="out" data-target="json">配置 JSON</button>
+    </div>
+    <div class="lab-export__actions">
+      <button id="copy-code" class="lab-btn" type="button">复制</button>
+      <button id="open-html" class="lab-btn" type="button">在新标签运行</button>
+      <button id="download" class="lab-btn" type="button">下载</button>
+    </div>
+  </div>
+
+  <div class="lab-export__body">
+    <pre id="out" class="lab-code" tabindex="0" role="tabpanel" aria-labelledby="tab-css"></pre>
+    <div class="lab-export__side">
+      <h3>生成说明</h3>
+      <ul id="export-notes" class="lab-notes"></ul>
+    </div>
+  </div>
+</section>
+
+<footer class="lab-foot">
+  <p>
+    基于 <a href="https://github.com/webkul/micron" rel="noopener">webkul/micron</a> 的二次开发（MIT）。
+    上游提供 12 个一次性点击 keyframe；本项目把它重做为状态机驱动、可编排、可导出、可访问的交互内核。
+  </p>
+  <p class="lab-foot__meta" id="perf">—</p>
+</footer>
+
+<div id="toast-region" aria-live="polite" aria-atomic="false"></div>
+
+<script type="module" src="./lab.js"></script>
+</body>
+</html>
