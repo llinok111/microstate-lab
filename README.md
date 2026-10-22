@@ -71,7 +71,7 @@ Then open `demo/index.html` — directly from the filesystem works, no server re
 | Command | What it runs |
 |---|---|
 | `npm test` | 94 unit tests: easing maths, motion plans, exports, stylesheet coverage, preferences |
-| `npm run test:browser` | 85 browser tests: real pointer/keyboard/touch, a11y audit, export runtime, declarative runtime |
+| `npm run test:browser` | 87 browser tests: real pointer/keyboard/touch, a11y audit, export runtime, declarative runtime |
 | `npm run build -- --report` | Bundle sizes and gzip deltas |
 | `npm run figures` | Regenerate the README images from the running page |
 | `npm run figures:check` | Re-verify them: dimensions, ink coverage, per-tile content |
@@ -301,12 +301,12 @@ They are included because a lab that only demonstrates the good path teaches not
 | `export.test.mjs` | 26 | Generated CSS parses and matches the plan, all targets well-formed |
 | `styles.test.mjs` | 3 | No class used without a rule, no dead rules, balanced braces |
 | `preferences.test.mjs` | 20 | The OS always beats a stored preference; spring duration; bundle export |
-| `browser.test.mjs` | 39 | Real pointer/keyboard interaction, async state machine, drag, export panel |
+| `browser.test.mjs` | 41 | Real pointer/keyboard interaction, async state machine, drag, export panel |
 | `a11y.test.mjs` | 17 | Real OS reduce, ARIA tree, focus rings via keyboard, contrast |
 | `export-runtime.test.mjs` | 11 | Exported HTML loads in Chrome and animates when clicked |
 | `runtime.test.mjs` | 18 | Declarative mounting, no nested buttons, observer, touch long-press |
 
-179 tests total. The v0.2 suites are adversarial by design: the runtime tests exist
+181 tests total. The v0.2 suites are adversarial by design: the runtime tests exist
 because the first implementation nested `<button>` inside `<button>`, and the
 preference tests iterate every stored value against an OS reduce to prove none of
 them can lift it.

@@ -230,8 +230,20 @@ function applyMotion() {
 function syncControlsFromMotion(motion) {
   const effective = { ...getPreset(state.presetId).motion, ...motion };
 
-  $("#duration").value = clampToRange("#duration", effective.duration);
-  $("#duration-num").value = effective.duration;
+  // `"auto"` is a valid duration for springs, but it is not a valid value for an
+  // <input type="number">: assigning it yields an empty string, and reading that
+  // back gives Number("") === 0 — which collapsed every spring preset to a 0ms
+  // "static" state. The slider shows the resolved settle time; the sentinel is
+  // carried by the checkbox instead.
+  const isAuto = effective.duration === "auto";
+  const resolvedDuration = isAuto
+    ? plan({ ...effective, osPrefers: false, policy: "respect" }).effective.duration
+    : effective.duration;
+
+  $("#duration").value = clampToRange("#duration", resolvedDuration);
+  $("#duration-num").value = resolvedDuration;
+  $("#auto-duration").checked = isAuto;
+  $("#auto-duration").closest(".lab-field").classList.toggle("is-on", isAuto);
   $("#delay").value = clampToRange("#delay", effective.delay);
   $("#delay-num").value = effective.delay;
 
@@ -268,7 +280,10 @@ function readControls() {
   return {
     ...preset.motion,
     ...state.motion,
-    duration: Number($("#duration-num").value),
+    // The auto checkbox is the source of truth for a spring: reading the number
+    // input alone loses the "no opinion" state and bakes in whichever value the
+    // slider happened to be showing.
+    duration: $("#auto-duration").checked ? "auto" : Number($("#duration-num").value),
     delay: Number($("#delay-num").value),
     easing: $("#easing").value,
     trigger: $("#trigger").value,
@@ -472,10 +487,30 @@ function bindControls() {
     const v = clampToRange("#duration", value);
     $("#duration").value = v;
     $("#duration-num").value = v;
+    // Touching the slider is an opinion: it clears "auto" rather than leaving a
+    // checkbox ticked while the value it governs is being overridden.
+    if ($("#auto-duration").checked) {
+      $("#auto-duration").checked = false;
+      $("#auto-duration").closest(".lab-field").classList.remove("is-on");
+    }
     state.motion.duration = v;
     applyMotion();
     updateNotes(readControls());
   };
+
+  $("#auto-duration").addEventListener("change", (ev) => {
+    if (ev.target.checked) {
+      state.motion.duration = "auto";
+    } else {
+      // Unchecking adopts whatever the panel is currently showing, so the
+      // transition out of auto is continuous rather than a jump to 240ms.
+      const shown = Number($("#duration-num").value);
+      state.motion.duration = Number.isFinite(shown) && shown > 0 ? shown : 240;
+    }
+    syncControlsFromMotion({ ...getPreset(state.presetId).motion, ...state.motion });
+    applyMotion();
+    updateNotes(readControls());
+  });
 
   const syncDelay = (value) => {
     const v = clampToRange("#delay", value);

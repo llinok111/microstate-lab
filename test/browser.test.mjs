@@ -532,6 +532,46 @@ test("the exported stylesheet carries a reduced-motion block for the chosen stra
 
 // -------------------------------------------------------------- parameters ---
 
+test("a spring preset shows its physical duration, not 0ms", async () => {
+  // Regression: syncControlsFromMotion wrote "auto" into an <input type="number">,
+  // which coerces to "", which reads back as Number("") === 0 — so every spring
+  // preset reported "0ms · static" while actually animating for ~500ms.
+  await selectPreset("toggle-spring");
+  await page.waitForTimeout(200);
+
+  const state = await page.evaluate(() => {
+    const p = window.__lab.getLastPlan();
+    return {
+      duration: p.effective.duration,
+      auto: p.durationAuto,
+      physical: p.physicalDuration,
+      fact: document.querySelector("#fact-effective").textContent,
+      input: document.querySelector("#duration-num").value,
+      checkbox: document.querySelector("#auto-duration").checked,
+    };
+  });
+
+  assert.equal(state.auto, true, "toggle-spring should resolve duration automatically");
+  assert.ok(state.duration > 300, `expected a spring duration, got ${state.duration}`);
+  assert.equal(state.duration, state.physical);
+  assert.notEqual(state.input, "", "the number input must not be left empty");
+  assert.equal(state.checkbox, true);
+  assert.ok(!state.fact.includes("0ms"), `panel still says "${state.fact}"`);
+});
+
+test("touching the duration slider clears the auto flag", async () => {
+  await selectPreset("toggle-spring");
+  await page.waitForTimeout(200);
+  assert.equal(await page.locator("#auto-duration").isChecked(), true);
+
+  await page.locator("#duration-num").fill("300");
+  await page.waitForTimeout(200);
+
+  assert.equal(await page.locator("#auto-duration").isChecked(), false, "auto should clear on manual edit");
+  const dur = await page.evaluate(() => window.__lab.getLastPlan().effective.duration);
+  assert.equal(dur, 300);
+});
+
 test("duration slider changes the exported duration", async () => {
   await selectPreset("press-soft");
   await page.locator("#duration-num").fill("400");

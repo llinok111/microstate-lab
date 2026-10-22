@@ -736,3 +736,32 @@ input:focus-visible {
     flex-wrap: wrap;
   }
 }
+
+/* Auto-duration toggle. Only meaningful for springs, but always present: hiding
+   it would make the spring's duration look like an ordinary slider value. */
+.lab-auto {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  color: var(--lab-ink-3);
+  cursor: pointer;
+  margin-top: 2px;
+}
+
+.lab-auto input {
+  accent-color: var(--lab-accent);
+  width: 14px;
+  height: 14px;
+}
+
+.lab-field.is-on .lab-auto {
+  color: var(--lab-accent-2);
+  font-weight: 600;
+}
+
+/* When auto is on, the manual number box is informational, not editable. */
+.lab-field.is-on input[type="number"],
+.lab-field.is-on input[type="range"] {
+  opacity: 0.55;
+}
